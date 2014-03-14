@@ -285,6 +285,10 @@ class SpecDataList(object):
                     raise SpecDataError("Column number " + str(n) + " out of range in SpecDataList")
                 
             newarray = SpecDataArray(self.currentfile, self.spdcols, self.modjdate, self.modbjdate, self.hvcorrect)
+            if self.yscale != 1.0:
+                newarray.yscale = self.yscale
+            if self.yoffset != 0.0:
+                newarray.yoffset = self.yoffset
             self.datalist.append(newarray)
         fin.close()
 
@@ -318,6 +322,22 @@ class SpecDataList(object):
             self.maxminy = datarange.DataRange(min(yvmins),max(yvmaxes))
             self.dirty = True
         return (self.maxminx, self.maxminy)
+
+    def set_yscale(self, ys = 1.0):
+        """Set the given Y scale on the data"""
+        if ys == self.yscale: return
+        self.yscale = ys
+        for d in self.datalist:
+            d.yscale = ys
+        self.dirty = True
+
+    def set_yoffset(self, yo = 0.0):
+        """Set the given Y offset on the data"""
+        if yo == self.yoffset: return
+        self.yoffset = yo
+        for d in self.datalist:
+            d.yoffset = yo
+        self.dirty = True
 
     def load(self, node):
         """Load control file from XML file"""
