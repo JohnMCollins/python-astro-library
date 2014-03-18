@@ -27,10 +27,10 @@ class SpecDataArray(object):
         self.ignored = None
         self.modjdate = mjdate
         self.modbjdate = mbjdate
-        self.xoffset = 0.0
-        self.yoffset = 0.0
-        self.xscale = 1.0
-        self.yscale = 1.0
+        self.xoffset = None
+        self.yoffset = None
+        self.xscale = None
+        self.yscale = None
         self.hvcorrect = hvc
 
     def loadfile(self, directory):
@@ -78,9 +78,9 @@ class SpecDataArray(object):
         
         # Don't use += or -= or the whole array will be mangled
 
-        if self.xscale != 1.0:
+        if self.xscale is not None and self.xscale != 1.0:
             res = res * self.xscale
-        if self.xoffset != 0.0:
+        if self.xoffset is not None and self.xoffset != 0.0:
             res = res + self.xoffset
         return res
 
@@ -98,9 +98,9 @@ class SpecDataArray(object):
         
         # Don't use += or -= or the whole array will be mangled
 
-        if self.yscale != 1.0:
+        if self.yscale is not None and self.yscale != 1.0:
             res = res * self.yscale
-        if self.yoffset != 0.0:
+        if self.yoffset is not None self.yoffset != 0.0:
             res = res + self.yoffset
         return res
 
@@ -115,10 +115,10 @@ class SpecDataArray(object):
         self.ignored = None
         self.modjdate = 0.0
         self.modbjdate = 0.0
-        self.xoffset = 0.0
-        self.yoffset = 0.0
-        self.xscale = 1.0
-        self.yscale = 1.0
+        self.xoffset = None
+        self.yoffset = None
+        self.xscale = None
+        self.yscale = None
         self.hvcorrect = 0.0
         while not child.isNull():
             tagn = child.toElement().tagName()
@@ -152,13 +152,13 @@ class SpecDataArray(object):
             xmlutil.savedata(doc, node, "modjdate", self.modjdate)
         if self.modbjdate != 0.0:
             xmlutil.savedata(doc, node, "modbjdate", self.modbjdate)
-        if self.xoffset != 0.0:
+        if self.xoffset is not None:
             xmlutil.savedata(doc, node, "xoffset", self.xoffset)
-        if self.xscale != 1.0:
+        if self.xscale is not None:
             xmlutil.savedata(doc, node, "xscale", self.xscale)
-        if self.yoffset != 0.0:
+        if self.yoffset is not None:
             xmlutil.savedata(doc, node, "yoffset", self.yoffset)
-        if self.yscale != 1.0:
+        if self.yscale is not None:
             xmlutil.savedata(doc, node, "yscale", self.yscale)
         if self.hvcorrect != 0.0:
             xmlutil.savedata(doc, node, "hvcorrect", self.hvcorrect)
@@ -193,6 +193,8 @@ class SpecDataList(object):
             self.dirname = self.obsfname = ""
         self.cols = cols
         self.spdcols = spdcols
+        self.xoffset = 0.0
+        self.xscale = 1.0
         self.yoffset = 0.0
         self.yscale = 1.0
         self.datalist = []
@@ -289,7 +291,7 @@ class SpecDataList(object):
                 newarray.yscale = self.yscale
             if self.yoffset != 0.0:
                 newarray.yoffset = self.yoffset
-            self.datalist.append(newarray)
+            self.datalist.append(newarray)Beware!!!!
         fin.close()
 
     def loadfiles(self):
@@ -323,20 +325,51 @@ class SpecDataList(object):
             self.dirty = True
         return (self.maxminx, self.maxminy)
 
-    def set_yscale(self, ys = 1.0):
-        """Set the given Y scale on the data"""
-        if ys == self.yscale: return
-        self.yscale = ys
+    def reset_xscale(self):
+        """Reset all the X scaling values"""
+        self.xscale = 1.0
+        self.xoffset = 0.0
         for d in self.datalist:
-            d.yscale = ys
+            d.xscale = None
+            d.xoffset = None
+        self.maxminx = None
         self.dirty = True
 
-    def set_yoffset(self, yo = 0.0):
-        """Set the given Y offset on the data"""
-        if yo == self.yoffset: return
+    def reset_yscale(self):
+        """Reset all the Y scaling values"""
+        self.yscale = 1.0
+        self.yoffset = 0.0
+        for d in self.datalist:
+            d.yscale = None
+            d.yoffset = None
+        self.maxminy = None
+        self.dirty = True
+
+    def set_xscaleoffset(self, xs = 1.0, xo = 0.0, force = False):
+        """Set the given X scale on the data, forcing every data item if required"""
+        if force:
+            for d in self.datalist:
+                d.xscale = xs
+                d.xoffset = xo
+        else:
+            if xs == self.xscale and xo == self.xoffset: return
+            self.xscale = xs
+            self.xoffset = xo
+            for d in self.datalist:
+                if d.xscale is None: d.xscale = xs
+                if d.xoffset is None: d.xoffset = xo
+        self.maxminx = None
+        self.dirty = True
+    
+    def set_yscaleoffset(self, ys = 1.0, yo = 0.0):
+        """Set the given Y scale on the data"""
+        if ys == self.yscale and yo == self.yoffset: return
+        self.yscale = ys
         self.yoffset = yo
         for d in self.datalist:
+            d.yscale = ys
             d.yoffset = yo
+        self.maxminy = None
         self.dirty = True
 
     def load(self, node):
@@ -345,8 +378,10 @@ class SpecDataList(object):
         self.dirname = self.obsfname = ""
         self.cols = []
         self.spdcols = []
+        self.xoffset = 0.0
         self.yoffset = 0.0
-        self.yscale = 0.0
+        self.xscale = 1.0
+        self.yscale = 1.0
         self.datalist = []
         self.maxminx = None
         self.maxminy = None
@@ -367,6 +402,10 @@ class SpecDataList(object):
                 while not schild.isNull():
                     self.spdcols.append(xmlutil.gettext(schild))
                     schild = schild.nextSibling()
+            elif tagn == "xoffset":
+                self.yoffset = xmlutil.getfloat(child)
+            elif tagn == "xscale":
+                self.yscale = xmlutil.getfloat(child)
             elif tagn == "yoffset":
                 self.yoffset = xmlutil.getfloat(child)
             elif tagn == "yscale":
