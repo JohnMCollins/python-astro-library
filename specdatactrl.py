@@ -31,6 +31,7 @@ class SpecDataArray(object):
         self.yoffset = None
         self.xscale = None
         self.yscale = None
+        self.listlink = None
         self.hvcorrect = hvc
 
     def loadfile(self, directory):
@@ -76,12 +77,20 @@ class SpecDataArray(object):
         if res is None:
             raise SpecDataError("Data for " + self.filename + " is not loaded")
         
-        # Don't use += or -= or the whole array will be mangled
+        # Don't use += or -= below or the whole array will be mangled
 
-        if self.xscale is not None and self.xscale != 1.0:
-            res = res * self.xscale
-        if self.xoffset is not None and self.xoffset != 0.0:
-            res = res + self.xoffset
+        xs = self.xscale
+        if xs is None and self.listlink is not None:
+            xs = self.listlink.xscale
+        if xs is not None and xs != 1.0:
+            res = res * xs
+
+        xo = self.xoffset
+        if xo is None and self.listlink is not None:
+            xo = self.listlink.xoffset
+        if xo is not None and xo != 0.0:
+            res = res + xo
+
         return res
 
     def get_yvalues(self, inclall = True):
@@ -96,12 +105,20 @@ class SpecDataArray(object):
         if res is None:
             raise SpecDataError("Data for " + self.filename + " is not loaded")
         
-        # Don't use += or -= or the whole array will be mangled
+        # Don't use += or -= below or the whole array will be mangled
 
-        if self.yscale is not None and self.yscale != 1.0:
-            res = res * self.yscale
-        if self.yoffset is not None self.yoffset != 0.0:
-            res = res + self.yoffset
+        ys = self.yscale
+        if ys is None and self.listlink is not None:
+            ys = self.listlink.yscale
+        if ys is not None and ys != 1.0:
+            res = res * ys
+
+        yo = self.yoffset
+        if yo is None and self.listlink is not None:
+            yo = self.listlink.yoffset
+        if yo is not None and yo != 0.0:
+            res = res + yo
+
         return res
 
     def load(self, node):
@@ -193,10 +210,10 @@ class SpecDataList(object):
             self.dirname = self.obsfname = ""
         self.cols = cols
         self.spdcols = spdcols
-        self.xoffset = 0.0
-        self.xscale = 1.0
-        self.yoffset = 0.0
-        self.yscale = 1.0
+        self.xoffset = None
+        self.xscale = None
+        self.yoffset = None
+        self.yscale = None
         self.datalist = []
         self.dirty = False
 
@@ -256,7 +273,7 @@ class SpecDataList(object):
                 occs[f5] = occs[f5] + 1
             except KeyError:
                 occs[f5] = 1
-        revoccs = dict()
+        revoccs = dict()_
         for k,v in occs.items():
             revoccs[v] = k
         prefix = revoccs[max(occs.values())]
@@ -287,11 +304,8 @@ class SpecDataList(object):
                     raise SpecDataError("Column number " + str(n) + " out of range in SpecDataList")
                 
             newarray = SpecDataArray(self.currentfile, self.spdcols, self.modjdate, self.modbjdate, self.hvcorrect)
-            if self.yscale != 1.0:
-                newarray.yscale = self.yscale
-            if self.yoffset != 0.0:
-                newarray.yoffset = self.yoffset
-            self.datalist.append(newarray)Beware!!!!
+            newarray.listlink = self
+            self.datalist.append(newarray)
         fin.close()
 
     def loadfiles(self):
@@ -313,7 +327,7 @@ class SpecDataList(object):
                     xv = f.get_xvalues(False)
                     yv = f.get_yvalues(False)
                     xvmins.append(xv.min())
-                    xvmaxes.append(xv.max())
+                    xvmaxes.append(xv.max())_
                     yvmins.append(yv.min())
                     yvmaxes.append(yv.max())
                 except SpecDataError:
@@ -324,52 +338,135 @@ class SpecDataList(object):
             self.maxminy = datarange.DataRange(min(yvmins),max(yvmaxes))
             self.dirty = True
         return (self.maxminx, self.maxminy)
-
-    def reset_xscale(self):
-        """Reset all the X scaling values"""
-        self.xscale = 1.0
-        self.xoffset = 0.0
-        for d in self.datalist:
-            d.xscale = None
-            d.xoffset = None
-        self.maxminx = None
-        self.dirty = True
-
-    def reset_yscale(self):
-        """Reset all the Y scaling values"""
-        self.yscale = 1.0
-        self.yoffset = 0.0
-        for d in self.datalist:
-            d.yscale = None
-            d.yoffset = None
-        self.maxminy = None
-        self.dirty = True
-
-    def set_xscaleoffset(self, xs = 1.0, xo = 0.0, force = False):
-        """Set the given X scale on the data, forcing every data item if required"""
-        if force:
-            for d in self.datalist:
-                d.xscale = xs
-                d.xoffset = xo
-        else:
-            if xs == self.xscale and xo == self.xoffset: return
-            self.xscale = xs
-            self.xoffset = xo
-            for d in self.datalist:
-                if d.xscale is None: d.xscale = xs
-                if d.xoffset is None: d.xoffset = xo
-        self.maxminx = None
-        self.dirty = True
     
-    def set_yscaleoffset(self, ys = 1.0, yo = 0.0):
-        """Set the given Y scale on the data"""
-        if ys == self.yscale and yo == self.yoffset: return
-        self.yscale = ys
-        self.yoffset = yo
+    def count_indiv_x(self):
+        """Count number of individual scales or offsets in X values"""
+        n = 0
         for d in self.datalist:
-            d.yscale = ys
-            d.yoffset = yo
-        self.maxminy = None
+            if d.xscale is not None or d.xoffset is not None:
+                n += 1
+        return n
+
+    def count_indiv_y(self):
+        """Count number of individual scales or offsets in Y values"""
+        n = 0
+        for d in self.datalist:
+            if d.yscale is not None or d.yoffset is not None:
+                n += 1
+        return n
+
+    def reset_indiv_x(self):
+        """Reset any individual scales and offsets"""
+        for d in self.datalist:
+            d.xscale = d.xoffset = None
+
+    def reset_x(self):
+        """Reset the X scale and offset"""
+        xl = xu = 0.0
+        if self.maxminx is not None:
+            xl = self.maxminx.lower
+            xu = self.maxminx.upper
+        changes = False
+        if self.xoffset is not None:
+            xl -= self.xoffset
+            xu -= self.xoffset
+            self.xoffset = None
+            changes = True
+        if self.xscale is not None:
+            xl /= self.xscale
+            xu /= self.xscale
+            self.xscale = None
+            changes = True
+        if changes:
+            if self.maxminx is not None:
+                self.maxminx = datarange.DataRange(xl, xu)
+            self.dirty = True       
+
+    def reset_indiv_y(self):
+        """Reset any individual scales and offsets"""
+        for d in self.datalist:
+            d.yscale = d.yoffset = None
+
+    def reset_y(self):
+        """Reset the Y scale and offset"""
+        yl = yu = 0.0
+        if self.maxminy is not None:
+            yl = self.maxminy.lower
+            yu = self.maxminy.upper
+        changes = False
+        if self.yoffset is not None:
+            yl -= self.yoffset
+            yu -= self.yoffset
+            self.yoffset = None
+            changes = True
+        if self.yscale is not None:
+            yl /= self.yscale
+            yu /= self.yscale
+            self.yscale = None
+            changes = True
+        if changes:
+            if self.maxminy is not None:
+                self.maxminy = datarange.DataRange(yl, yu)
+            self.dirty = True
+
+    def set_xscale(self, newsc):
+        """Set x scale and adjust min/max if needed"""
+        change = newsc
+        if self.xscale is not None:
+            change /= self.xscale
+        if change == 1.0: return
+        if self.xoffset is not None:
+            self.xoffset *= change
+        if self.maxminx is not None:
+            self.maxminx = datarange.DataRange(self.maxminx.lower * change, self.maxminx.upper * change)
+        if newsc == 1.0:
+            self.xscale = None
+        else:
+            self.xscale = newsc
+        self.dirty = True
+
+    def set_xoffset(self, newoff):
+        """Set x offset and adjust min/max if needed"""
+        change = newoff
+        if self.xoffset is not None:
+            change -= self.xoffset
+        if change == 0.0: return
+        if self.maxminx is not None:
+            self.maxminx = datarange.DataRange(self.maxminx.lower + change, self.maxminx.upper + change)
+        if newoff == 0.0:
+            self.xoffset = None
+        else:
+            self.xoffset = newoff
+        self.dirty = True
+
+    def set_yscale(self, newsc):
+        """Set y scale and adjust min/max if needed"""
+        change = newsc
+        if self.yscale is not None:
+            change /= self.yscale
+        if change == 1.0: return
+        if self.maxminy is not None:
+            self.maxminy = datarange.DataRange(self.maxminy.lower * change, self.maxminy.upper * change)
+        if newsc == 1.0:
+            self.yscale = None
+        else:
+            self.yscale = newsc
+        self.dirty = True
+
+    def set_yoffset(self, newoff):
+        """Set y offset and adjust min/max if needed"""
+        change = newoff
+        if self.yoffset is not None:
+            change -= self.yoffset
+        if change == 0.0: return
+        if self.yoffset is not None:
+            self.yoffset *= change
+        if self.maxminy is not None:
+            self.maxminy = datarange.DataRange(self.maxminy.lower + change, self.maxminy.upper + change)
+        if newoff == 0.0:
+            self.yoffset = None
+        else:
+            self.yoffset = newoff
         self.dirty = True
 
     def load(self, node):
@@ -378,10 +475,10 @@ class SpecDataList(object):
         self.dirname = self.obsfname = ""
         self.cols = []
         self.spdcols = []
-        self.xoffset = 0.0
-        self.yoffset = 0.0
-        self.xscale = 1.0
-        self.yscale = 1.0
+        self.xoffset = None
+        self.yoffset = None
+        self.xscale = None
+        self.yscale = None
         self.datalist = []
         self.maxminx = None
         self.maxminy = None
@@ -441,9 +538,13 @@ class SpecDataList(object):
         colsnode = doc.createElement("spcols")
         node.appendChild(colsnode)
         for c in self.spdcols: xmlutil.savedata(doc, colsnode, "sc", c)
-        if self.yoffset != 0.0:
+        if self.xoffset is not None and self.xoffset != 0.0:
+            xmlutil.savedata(doc, node, "xoffset", self.xoffset)
+        if self.xscale is not None and self.xscale != 1.0:
+            xmlutil.savedata(doc, node, "xscale", self.xscale)
+        if self.yoffset is not None and self.yoffset != 0.0:
             xmlutil.savedata(doc, node, "yoffset", self.yoffset)
-        if self.yscale != 1.0:
+        if self.yscale is not None and self.yscale != 1.0:
             xmlutil.savedata(doc, node, "yscale", self.yscale)
         if self.maxminx is not None:
             self.maxminx.save(doc, node, "maxminx")
