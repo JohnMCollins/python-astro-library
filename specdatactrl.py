@@ -273,7 +273,7 @@ class SpecDataList(object):
                 occs[f5] = occs[f5] + 1
             except KeyError:
                 occs[f5] = 1
-        revoccs = dict()_
+        revoccs = dict()
         for k,v in occs.items():
             revoccs[v] = k
         prefix = revoccs[max(occs.values())]
@@ -313,31 +313,44 @@ class SpecDataList(object):
         for f in self.datalist:
             f.loadfile(self.dirname)
 
+    def loadmaxmin(self):
+        """Load up maxes and mins for other routines"""
+        if self.maxminx is not None and self.maxminy is not None: return
+        self.loadfiles()
+        xvmins = []
+        yvmins = []
+        xvmaxes = []
+        yvmaxes = []
+        for f in self.datalist:
+            try:
+                xv = f.get_xvalues(False)
+                yv = f.get_yvalues(False)
+                xvmins.append(xv.min())
+                xvmaxes.append(xv.max())
+                yvmins.append(yv.min())
+                yvmaxes.append(yv.max())
+            except SpecDataError:
+                pass
+        if len(xvmins) == 0:
+            raise SpecDataError("Cannot find any X or Y values for max/min")
+        self.maxminx = datarange.DataRange(min(xvmins),max(xvmaxes))
+        self.maxminy = datarange.DataRange(min(yvmins),max(yvmaxes))
+        self.dirty = True
+
     def getmaxmin(self):
         """Return ((minx,maxx),(miny,maxy))"""
-
-        if self.maxminx is None or self.maxminy is None:
-            self.loadfiles()
-            xvmins = []
-            yvmins = []
-            xvmaxes = []
-            yvmaxes = []
-            for f in self.datalist:
-                try:
-                    xv = f.get_xvalues(False)
-                    yv = f.get_yvalues(False)
-                    xvmins.append(xv.min())
-                    xvmaxes.append(xv.max())_
-                    yvmins.append(yv.min())
-                    yvmaxes.append(yv.max())
-                except SpecDataError:
-                    pass
-            if len(xvmins) == 0:
-                raise SpecDataError("Cannot find any X or Y values for max/min")
-            self.maxminx = datarange.DataRange(min(xvmins),max(xvmaxes))
-            self.maxminy = datarange.DataRange(min(yvmins),max(yvmaxes))
-            self.dirty = True
+        self.loadmaxmin()
         return (self.maxminx, self.maxminy)
+
+    def getmaxminx(self):
+        """Get just max and min for x as tuple"""
+        self.loadmaxmin()
+        return (self.maxminx.lower, self.maxminx.upper)
+
+    def getmaxminy(self):
+        """Get just max and min for y as tuple"""
+        self.loadmaxmin()
+        return (self.maxminy.lower, self.maxminy.upper)
     
     def count_indiv_x(self):
         """Count number of individual scales or offsets in X values"""
