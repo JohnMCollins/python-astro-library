@@ -85,10 +85,8 @@ class Plotter(object):
             r = self.ranges.getrange(rn)
             col = r.rgbcolour()
             if self.xrange.inrange(r.lower):
-                print "plotting lower %.6f from %.6f to %.6f\n" % (r.lower, self.yrange.lower, self.yrange.upper)
                 plt.axvline(x=r.lower, ymin=self.yrange.lower, ymax=self.yrange.upper, color=col)
             if self.xrange.inrange(r.upper):
-                print "plotting upper %.6f from %.6f to %.6f\n" % (r.upper, self.yrange.lower, self.yrange.upper)
                 plt.axvline(x=r.upper, ymin=self.yrange.lower, ymax=self.yrange.upper, color=col)
         for p in plotarray:
             plt.plot(p.get_xvalues(), p.get_yvalues())

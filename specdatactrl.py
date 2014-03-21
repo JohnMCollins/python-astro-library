@@ -308,9 +308,10 @@ class SpecDataList(object):
             self.datalist.append(newarray)
         fin.close()
 
-    def loadfiles(self):
+    def loadfiles(self, flist = None):
         """Load all the files"""
-        for f in self.datalist:
+        if flist is None: flist = self.datalist
+        for f in flist:
             f.loadfile(self.dirname)
 
     def loadmaxmin(self):
