@@ -3,6 +3,7 @@
 import matplotlib.pyplot as plt
 import string
 import copy
+import xml.etree.ElementTree as ET
 
 import datarange
 import xmlutil
@@ -25,19 +26,16 @@ class Plotter_options(object):
 
     def load(self, node):
         """Load settings from XML file"""
-        child = node.firstChild()
-        while not child.isNull():
-            tagn = child.toElement().tagName()
+        for child in node:
+            tagn = child.tag
             if tagn == "width":
                 self.width = xmlutil.getint(child)
             elif tagn == "height":
                 self.height = xmlutil.getint(child)
-            child = child.nextSibling()
 
     def save(self, doc, pnode, name):
         """Save settings to XML file"""
-        node = doc.createElement(name)
-        pnode.appendChild(node)
+        node = ET.SubElement(pnode, name)
         xmlutil.savedata(doc, node, "width", self.width)
         xmlutil.savedata(doc, node, "height", self.height)
 

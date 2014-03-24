@@ -1,5 +1,6 @@
 # Class type for ranges
 
+import xml.etree.ElementTree as ET
 import xmlutil
 import copy
 
@@ -70,11 +71,10 @@ class  DataRange(object):
     def load(self, node):
         """Load range from XML file"""
         self.description = ""
-        child = node.firstChild()
         self.red = self.green = self.blue = 0
         self.notused = False
-        while not child.isNull():
-            tagn = child.toElement().tagName()
+        for child in node:
+            tagn = child.tag
             if tagn == "lower":
                 self.lower = xmlutil.getfloat(child)
             elif tagn == "upper":
@@ -91,11 +91,10 @@ class  DataRange(object):
                 self.blue = xmlutil.getint(child)
             elif tagn == "notused":
                 self.notused = True
-            child = child.nextSibling()
 
     def save(self, doc, pnode, name):
         """Save range to XML file"""
-        node = doc.createElement(name)
+        node = ET.SubElement(pnode, name)
         xmlutil.savedata(doc, node, "lower", self.lower)
         xmlutil.savedata(doc, node, "upper", self.upper)
         if len(self.description) != 0:
@@ -106,7 +105,6 @@ class  DataRange(object):
         if self.green != 0: xmlutil.savedata(doc, node, "green", self.green)
         if self.blue != 0: xmlutil.savedata(doc, node, "blue", self.blue)
         xmlutil.savebool(doc, node, "notused", self.notused)
-        pnode.appendChild(node)
 
 def MergeRange(a, b):
     """Merge a pair of ranges into one range with the maximum of the two"""
@@ -158,20 +156,17 @@ class  RangeList(object):
 
     def load(self, node):
         """Load ranges from XML file"""       
-        child = node.firstChild()
-        while not child.isNull():
-            if child.toElement().tagName() == "rng":
+        for child in node:
+            if child.tag == "rng":
                 newrg = DataRange()
                 newrg.load(child)
                 self.setrange(newrg)
-            child = child.nextSibling()
 
     def save(self, doc, pnode, name):
         """Save ranges to XML file"""
-        node = doc.createElement(name)
+        node = ET.SubElement(pnode, name)
         for n in self.rlist.values():
             n.save(doc, node, "rng")
-        pnode.appendChild(node)
 
 def load_ranges(filename):
     """Load a list of ranges from the given file"""

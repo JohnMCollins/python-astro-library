@@ -5,6 +5,7 @@ import os.path
 import glob
 import string
 import re
+import xml.etree.ElementTree as ET
 
 import xmlutil
 import datarange
@@ -105,7 +106,7 @@ class SpecDataArray(object):
         if res is None:
             raise SpecDataError("Data for " + self.filename + " is not loaded")
         
-        # Don't use += or -= below or the whole array will be mangled
+        # Don't use += or -= below or the whole array import xml.etree.ElementTree as ETwill be mangled
 
         ys = self.yscale
         if ys is None and self.listlink is not None:
@@ -123,7 +124,6 @@ class SpecDataArray(object):
 
     def load(self, node):
         """Load from XML DOM node"""
-        child = node.firstChild()
         self.filename = ""
         self.discount = None
         self.xvalues = None
@@ -137,8 +137,8 @@ class SpecDataArray(object):
         self.xscale = None
         self.yscale = None
         self.hvcorrect = 0.0
-        while not child.isNull():
-            tagn = child.toElement().tagName()
+        for child in node:
+            tagn = child.tag
             if tagn == "filename":
                 self.filename = xmlutil.gettext(child)
             elif tagn == "discount":
@@ -157,11 +157,10 @@ class SpecDataArray(object):
                 self.yscale = xmlutil.getfloat(child)
             elif tagn == "hvcorrect":
                 self.hvcorrect = xmlutil.getfloat(child)
-            child = child.nextSibling()          
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
-        node = doc.createElement(name)
+        node = ET.SubElement(pnode, name)
         xmlutil.savedata(doc, node, "filename", self.filename)
         if self.discount is not None:
             xmlutil.savedata(doc, node, "discount", self.discount)
@@ -179,7 +178,6 @@ class SpecDataArray(object):
             xmlutil.savedata(doc, node, "yscale", self.yscale)
         if self.hvcorrect != 0.0:
             xmlutil.savedata(doc, node, "hvcorrect", self.hvcorrect)
-        pnode.appendChild(node)
 
 def parse_jd(field):
     """Parse Julian date, checking it looks right"""
@@ -485,7 +483,6 @@ class SpecDataList(object):
 
     def load(self, node):
         """Load control file from XML file"""
-        child = node.firstChild()
         self.dirname = self.obsfname = ""
         self.cols = []
         self.spdcols = []
@@ -497,22 +494,16 @@ class SpecDataList(object):
         self.maxminx = None
         self.maxminy = None
         self.dirty = False
-        while not child.isNull():
-            tagn = child.toElement().tagName()
+        for child in node:
+            tagn = child.tag
             if tagn == "dirname":
                 self.dirname = xmlutil.gettext(child)
             elif tagn == "obsfname":
                 self.obsfname = xmlutil.gettext(child)
             elif tagn == "obscols":
-                ochild = child.firstChild()
-                while not ochild.isNull():
-                    self.cols.append(xmlutil.gettext(ochild))
-                    ochild = ochild.nextSibling()
+                for ochild in child: self.cols.append(xmlutil.gettext(ochild))
             elif tagn == "spcols":
-                schild = child.firstChild()
-                while not schild.isNull():
-                    self.spdcols.append(xmlutil.gettext(schild))
-                    schild = schild.nextSibling()
+                for schild in child: self.spdcols.append(xmlutil.gettext(schild))
             elif tagn == "xoffset":
                 self.yoffset = xmlutil.getfloat(child)
             elif tagn == "xscale":
@@ -528,29 +519,23 @@ class SpecDataList(object):
                 self.maxminy = datarange.DataRange()
                 self.maxminy.load(child)
             elif tagn == "data":
-                dnode = child.firstChild()
-                while not dnode.isNull():
+                for dnode in child:
                     sa = SpecDataArray("")
                     sa.load(dnode)
-                    self.datalist.append(sa)
-                    dnode = dnode.nextSibling()                
-            child = child.nextSibling()
+                    self.datalist.append(sa)                
         for d in self.datalist:
             d.cols = self.spdcols
 
     def save(self, doc, pnode, name):
         """Save to XML file"""
-        node = doc.createElement(name)
-        pnode.appendChild(node)
+        node = ET.SubElement(pnode, name)
         if len(self.dirname) != 0:
             xmlutil.savedata(doc, node, "dirname", self.dirname)
         if len(self.obsfname) != 0:
             xmlutil.savedata(doc, node, "obsfname", self.obsfname)
-        colsnode = doc.createElement("obscols")
-        node.appendChild(colsnode)
+        colsnode = ET.SubElement(node, "obscols")
         for c in self.cols: xmlutil.savedata(doc, colsnode, "oc", c)
-        colsnode = doc.createElement("spcols")
-        node.appendChild(colsnode)
+        colsnode = ET.SubElement(node, "spcols")
         for c in self.spdcols: xmlutil.savedata(doc, colsnode, "sc", c)
         if self.xoffset is not None and self.xoffset != 0.0:
             xmlutil.savedata(doc, node, "xoffset", self.xoffset)
@@ -564,8 +549,7 @@ class SpecDataList(object):
             self.maxminx.save(doc, node, "maxminx")
         if self.maxminy is not None:
             self.maxminy.save(doc, node, "maxminy")
-        dnode = doc.createElement("data")
-        node.appendChild(dnode)
+        dnode = ET.SubElement(node, "data")
         for d in self.datalist:
             d.save(doc, dnode, "array")
         self.dirty = False

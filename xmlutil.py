@@ -1,7 +1,6 @@
 # XML Utility functions
 
-from PyQt4.QtCore import *
-from PyQt4.QtXml import *
+import xml.etree.ElementTree as ET
 
 class XMLError(Exception):
     """Throw these errors if we get some value etc error"""
@@ -9,80 +8,66 @@ class XMLError(Exception):
 
 def gettext(node):
     """Extract the text child from an XML node"""
-    return str(node.firstChild().toText().data())
+    return node.text
 
 def getint(node):
     """Extract text field from XML node and make an int out of it"""
     try:
-        return int(gettext(node))
+        return int(node.text)
     except ValueError:
-        raise XMLError("Invalid int value for " + str(node.toElement().tagName()))
+        raise XMLError("Invalid int value for " + node.tag)
 
 def getfloat(node):
     """Extract text field from XML node and make a float out of it"""
     try:   
-        return float(gettext(node))
+        return float(node.text)
     except ValueError:
-        raise XMLError("Invalid float value for " + str(node.toElement().tagName()))
+        raise XMLError("Invalid float value for " + node.tag)
 
 def savedata(doc, pnode, name, value):
     """Encode something to an XML file"""
-    item = doc.createElement(name)
-    pnode.appendChild(item)
-    item.appendChild(doc.createTextNode(str(value)))
+    subnode = ET.SubElement(pnode, name)
+    subnode.text = str(value)
 
 def savebool(doc, pnode, name, value):
     """Possibly encode a bool value"""
     if not value: return
-    item = doc.createElement(name)
-    pnode.appendChild(item)
+    ET.SubElement(pnode, name)
 
 def find_child(pnode, name):
     """Find the first top-level child node of pnode of given name"""
-    child = pnode.firstChild()
-    while not child.isNull():
-        if child.toElement().tagName() == name: return child
-        child = child.nextSibling()
+    child = pnode.find(name)
+    if child is not None: return child
     raise XMLError("Could not find element '" + name + "'")
 
 def load_file(filename, rootname):
     """Load XML DOM document from file"""
-    fh = None
     try:
-        fh = QFile(filename)
-        if not fh.open(QIODevice.ReadOnly):
-            raise IOError(unicode(fh.errorString()))
-        doc = QDomDocument()
-        if not doc.setContent(fh):
-            raise XMLError("Could not parse " + filename + " as XML file")
+        doc = ET.parse(filename)
     except IOError as e:
         raise XMLError("IO error on " + filename + " - " + e.args[0])
-    finally:
-        if fh is not None:
-            fh.close()
-    root = doc.documentElement()
-    if root.tagName() != rootname:
-        raise XMLError("Unexpected document type read '" + root.tagName() + "' expected '" + rootname + "'")
+    except ET.ParseError as e:
+        raise XMLError("Parse error on " + filename + " - " + e.args[0])
+    root = doc.getroot()
+    if root.tag != rootname:
+        raise XMLError("Unexpected document type read '" + root.tag + "' expected '" + rootname + "'")
     return (doc, root)
 
 def init_save(docname, rootname):
     """Create XML DOM document ready to save"""
-    doc = QDomDocument(docname)
-    root = doc.createElement(rootname)
-    doc.appendChild(root)
+    root = ET.Element(rootname)
+    doc = ET.ElementTree(root)
     return (doc, root)
 
 def complete_save(filename, doc):
     """Complete save operation by writing document to filename"""
-    xmlstr = doc.toString()
     fh = None
     try:
-        fh = QFile(filename)
-        if not fh.open(QIODevice.WriteOnly):
-            raise IOError(unicode(fh.errorString()))
-        fh.write(str(xmlstr))
+        fh = open(filename, 'w')
+        doc.write(fh)
+        fh.write("\n")
     except IOError as e:
-        raise XMLError("IO error writing output file -", e.args[0])
+        raise XMLError("IO error on " + filename + " - " + e.args[0])
     finally:
         if fh is not None:
             fh.close()
