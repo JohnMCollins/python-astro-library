@@ -76,16 +76,22 @@ class Plotter(object):
             raise Plotter_error("X and Y ranges not set")
         plt.clf()
 
-        if not self.xrange.notused: plt.xlim(self.xrange.lower, self.xrange.upper)
-        if not self.yrange.notused: plt.ylim(self.yrange.lower, self.yrange.upper)
+        if self.xrange.notused:
+            col = self.xrange.rgbcolour()
+            plt.axvline(x=self.xrange.lower, ymin=self.yrange.lower, ymax=self.yrange.upper, color=col)
+            plt.axvline(x=self.xrange.upper, ymin=self.yrange.lower, ymax=self.yrange.upper, color=col)    
+        else:
+            plt.xlim(self.xrange.lower, self.xrange.upper)
+        if not self.yrange.notused:
+            plt.ylim(self.yrange.lower, self.yrange.upper)
 
         for rn in self.ranges.listranges():
             r = self.ranges.getrange(rn)
             col = r.rgbcolour()
-            if self.xrange.inrange(r.lower):
-                plt.axvline(x=r.lower, ymin=self.yrange.lower, ymax=self.yrange.upper, color=col)
-            if self.xrange.inrange(r.upper):
-                plt.axvline(x=r.upper, ymin=self.yrange.lower, ymax=self.yrange.upper, color=col)
+            #if self.xrange.inrange(r.lower):
+            plt.axvline(x=r.lower, ymin=self.yrange.lower, ymax=self.yrange.upper, color=col)
+            #if self.xrange.inrange(r.upper):
+            plt.axvline(x=r.upper, ymin=self.yrange.lower, ymax=self.yrange.upper, color=col)
         for p in plotarray:
             plt.plot(p.get_xvalues(), p.get_yvalues())
         plt.show()

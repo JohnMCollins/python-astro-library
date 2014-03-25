@@ -45,7 +45,7 @@ def load_file(filename, rootname):
     try:
         doc = ET.parse(filename)
     except IOError as e:
-        raise XMLError("IO error on " + filename + " - " + e.args[0])
+        raise XMLError("IO error on " + filename + " - " + e.args[1])
     except ET.ParseError as e:
         raise XMLError("Parse error on " + filename + " - " + e.args[0])
     root = doc.getroot()
