@@ -8,11 +8,11 @@ def mean_value(rangev, xvalues, yvalues):
 
     First arg is datarange object
     Second argument is x values
-    Third argument is y values"""
+    Third argument is y values
+    Return tuple with x range and integration result"""
 
     sel = (xvalues >= rangev.lower) & (xvalues <= rangev.upper)
     sxv = xvalues[sel]
     integ = si.trapz(yvalues[sel], sxv)
-    return integ / (sxv[-1] - sxv[0])
+    return (max(sxv)-min(sxv), integ)
 
-    

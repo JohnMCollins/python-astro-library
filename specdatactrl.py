@@ -35,6 +35,9 @@ class SpecDataArray(object):
         self.listlink = None
         self.hvcorrect = hvc
 
+    def __hash__(self):
+        return str.__hash__("%.6f" % self.modjdate)
+
     def loadfile(self, directory):
         """Load up spectral data from file
 
@@ -105,7 +108,7 @@ class SpecDataArray(object):
         res = self.yvalues
         if res is None:
             raise SpecDataError("Data for " + self.filename + " is not loaded")
-        
+        16938367
         # Don't use += or -= below or the whole array import xml.etree.ElementTree as ETwill be mangled
 
         ys = self.yscale
