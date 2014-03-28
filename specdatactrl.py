@@ -108,7 +108,7 @@ class SpecDataArray(object):
         res = self.yvalues
         if res is None:
             raise SpecDataError("Data for " + self.filename + " is not loaded")
-        16938367
+
         # Don't use += or -= below or the whole array import xml.etree.ElementTree as ETwill be mangled
 
         ys = self.yscale
@@ -468,6 +468,13 @@ class SpecDataList(object):
             self.yscale = newsc
         self.dirty = True
 
+    def adj_yscale(self, adj):
+        """Adjust Y scale by dividing by given figure"""
+        change = 1.0 / adj
+        if self.yscale is not None:
+            change *= self.yscale
+        self.set_yscale(change)
+
     def set_yoffset(self, newoff):
         """Set y offset and adjust min/max if needed"""
         change = newoff
@@ -525,6 +532,7 @@ class SpecDataList(object):
                 for dnode in child:
                     sa = SpecDataArray("")
                     sa.load(dnode)
+                    sa.listlink = self
                     self.datalist.append(sa)                
         for d in self.datalist:
             d.cols = self.spdcols
