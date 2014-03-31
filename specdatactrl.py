@@ -83,17 +83,19 @@ class SpecDataArray(object):
         
         # Don't use += or -= below or the whole array will be mangled
 
-        xs = self.xscale
-        if xs is None and self.listlink is not None:
-            xs = self.listlink.xscale
-        if xs is not None and xs != 1.0:
-            res = res * xs
+        if self.listlink is not None and self.listlink.xscale is not None:
+            res = res * self.listlink.xscale
+            if self.xscale is not None:
+                res *= self.xscale      # We already made a new copy above
+        elif self.xscale is not None:
+            res = res * self.xscale
 
-        xo = self.xoffset
-        if xo is None and self.listlink is not None:
-            xo = self.listlink.xoffset
-        if xo is not None and xo != 0.0:
-            res = res + xo
+        if self.listlink is not None and self.listlink.xoffset is not None:
+            res = res + self.listlink.xoffset
+            if self.xoffset is not None:
+                res += self.xoffset      # We already made a new copy above
+        elif self.xoffset is not None:
+            res = res + self.xoffset
 
         return res
 
@@ -109,19 +111,21 @@ class SpecDataArray(object):
         if res is None:
             raise SpecDataError("Data for " + self.filename + " is not loaded")
 
-        # Don't use += or -= below or the whole array import xml.etree.ElementTree as ETwill be mangled
+        # Don't use += or -= below or the whole array will be mangled
 
-        ys = self.yscale
-        if ys is None and self.listlink is not None:
-            ys = self.listlink.yscale
-        if ys is not None and ys != 1.0:
-            res = res * ys
+        if self.listlink is not None and self.listlink.yscale is not None:
+            res = res * self.listlink.yscale
+            if self.yscale is not None:
+                res *= self.yscale      # We already made a new copy above
+        elif self.yscale is not None:
+            res = res * self.yscale
 
-        yo = self.yoffset
-        if yo is None and self.listlink is not None:
-            yo = self.listlink.yoffset
-        if yo is not None and yo != 0.0:
-            res = res + yo
+        if self.listlink is not None and self.listlink.yoffset is not None:
+            res = res + self.listlink.yoffset
+            if self.yoffset is not None:
+                res += self.yoffset      # We already made a new copy above
+        elif self.yoffset is not None:
+            res = res + self.yoffset
 
         return res
 
@@ -474,6 +478,8 @@ class SpecDataList(object):
         if self.yscale is not None:
             change *= self.yscale
         self.set_yscale(change)
+        if self.yscale is None: return 1.0
+        return self.yscale
 
     def set_yoffset(self, newoff):
         """Set y offset and adjust min/max if needed"""
