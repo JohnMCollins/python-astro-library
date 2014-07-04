@@ -28,6 +28,17 @@ def savedata(doc, pnode, name, value):
     """Encode something to an XML file"""
     subnode = ET.SubElement(pnode, name)
     subnode.text = str(value)
+    return subnode
+
+def setboolattr(pnode, name, value):
+    """Save a boolean attribute"""
+    if not value: return
+    pnode.set(name, 'y')
+
+def getboolattr(pnode, name):
+    """Retreive a boolean attribute"""
+    v = pnode.get(name, default=False)
+    return v and v == 'y'
 
 def savebool(doc, pnode, name, value):
     """Possibly encode a bool value"""

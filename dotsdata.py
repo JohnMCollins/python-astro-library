@@ -10,7 +10,7 @@ class DOTSError(Exception):
     """Error in parsing file"""
     pass
 
-def _dotsdata(fin):
+def _dotsdata(fin, skiplines):
     result = []
     try:
         dims = map(lambda x:int(x), rep.split(string.strip(fin.readline())))
@@ -19,6 +19,11 @@ def _dotsdata(fin):
 
     while len(dims) > 1 and dims[-1] == 1:
         dims.pop()
+
+    # May have some extra bits to skip
+
+    for n in range(0, skiplines):
+        fin.readline()
 
     for line in fin:
         parts = rep.split(string.strip(line))
@@ -29,12 +34,15 @@ def _dotsdata(fin):
         result.extend(parts)
 
     dims.reverse()
+    print "dims=", dims
+    print "array=", numpy.array(result).shape
     return numpy.array(result).reshape(dims)
 
-def dotsdata(f):
+def dotsdata(f, skiplines=0):
     """Return array(s) from a DoTS output file
 
-    f is either an open file or a string representing a file name"""
+    f is either an open file or a string representing a file name
+    skiplines gives a number of lines to skip after the first dims line"""
 
     if isinstance(f, str):
         try:
@@ -42,11 +50,11 @@ def dotsdata(f):
         except IOError as e:
             raise DOTSError("IO error on " + f + " - ", e.args[1])
         try:
-            return _dotsdata(fin)
+            return _dotsdata(fin, skiplines)
         except DOTSError:
             raise
         finally:
             fin.close()
     else:
-        return _dotsdata(f)
+        return _dotsdata(f, skiplines)
 

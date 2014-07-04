@@ -13,6 +13,10 @@ import datarange
 class SpecDataError(Exception):
     pass
 
+# This is the reference wavelength for working out the slope adjustment
+
+Default_ref_wavelength = 6561.0
+
 class SpecDataArray(object):
     """This class holds a set of spectral data
 
@@ -21,7 +25,8 @@ class SpecDataArray(object):
     def __init__(self, filename, cols = ('xvalues', 'yvalues'), mjdate = 0.0, mbjdate = 0.0, hvc = 0.0):
         self.filename = filename
         self.cols = cols
-        self.discount = None
+        self.discount = False
+        self.remarks = None
         self.xvalues = None
         self.yvalues = None
         self.yerr = None
@@ -30,6 +35,7 @@ class SpecDataArray(object):
         self.modbjdate = mbjdate
         self.xoffset = None
         self.yoffset = None
+        self.contslope = 0.0
         self.xscale = None
         self.yscale = None
         self.listlink = None
@@ -62,12 +68,13 @@ class SpecDataArray(object):
 
     def skip(self, reason):
         """Set reason for skipping data"""
-        self.discount = reason
+        self.discount = True
+        self.remarks = reason
 
     def is_skipped(self):
         """Return reason for skipping data if applicable otherwise false"""
-        if self.discount is None: return False
-        return self.discount
+        if not self.discount: return False
+        return self.remarks
         
     def get_xvalues(self, inclall = True):
         """Get X values after applying offset and scaling"""
@@ -82,21 +89,19 @@ class SpecDataArray(object):
             raise SpecDataError("Data for " + self.filename + " is not loaded")
         
         # Don't use += or -= below or the whole array will be mangled
+        # Apply scaling and offsets.
 
-        if self.listlink is not None and self.listlink.xscale is not None:
-            res = res * self.listlink.xscale
-            if self.xscale is not None:
-                res *= self.xscale      # We already made a new copy above
-        elif self.xscale is not None:
-            res = res * self.xscale
-
-        if self.listlink is not None and self.listlink.xoffset is not None:
-            res = res + self.listlink.xoffset
-            if self.xoffset is not None:
-                res += self.xoffset      # We already made a new copy above
-        elif self.xoffset is not None:
-            res = res + self.xoffset
-
+        try:
+            try: res = res * self.listlink.xscale
+            except TypeError: pass
+            try: res = res + self.listlink.xoffset
+            except TypeError: pass
+        except AttributeError:
+            pass
+        try: res = res * self.xscale
+        except TypeError: pass
+        try: res = res + self.xoffset
+        except TypeError: pass 
         return res
 
     def get_yvalues(self, inclall = True):
@@ -113,26 +118,42 @@ class SpecDataArray(object):
 
         # Don't use += or -= below or the whole array will be mangled
 
-        if self.listlink is not None and self.listlink.yscale is not None:
-            res = res * self.listlink.yscale
-            if self.yscale is not None:
-                res *= self.yscale      # We already made a new copy above
-        elif self.yscale is not None:
-            res = res * self.yscale
+        if self.listlink is not None:
 
-        if self.listlink is not None and self.listlink.yoffset is not None:
-            res = res + self.listlink.yoffset
-            if self.yoffset is not None:
-                res += self.yoffset      # We already made a new copy above
-        elif self.yoffset is not None:
-            res = res + self.yoffset
+            # First apply global ones
+
+            try: res = res * self.listlink.yscale
+            except TypeError: pass
+            try: res = res + self.listlink.yoffset
+            except TypeError: pass
+
+            # We need xvalues if we have a slope on the continuum at all
+
+            if self.listlink.contslope != 0.0 or self.contslope != 0.0:
+                xvals = self.get_xvalues(True) - self.listlink.refwavelength
+                res = res + xvals * self.listlink.contslope
+            
+            # Apply local ones
+
+            try: res = res * self.yscale
+            except TypeError: pass
+            try: res = res + self.yoffset
+            except TypeError: pass
+            if self.contslope != 0.0:
+                res = res + xvals * self.contslope
+        else:
+            try: res = res * self.yscale
+            except TypeError: pass
+            try: res = res + self.yoffset
+            except TypeError: pass
 
         return res
 
     def load(self, node):
         """Load from XML DOM node"""
         self.filename = ""
-        self.discount = None
+        self.remarks = None
+        self.discount = False
         self.xvalues = None
         self.yvalues = None
         self.yerr = None
@@ -141,6 +162,7 @@ class SpecDataArray(object):
         self.modbjdate = 0.0
         self.xoffset = None
         self.yoffset = None
+        self.contslope = 0.0
         self.xscale = None
         self.yscale = None
         self.hvcorrect = 0.0
@@ -149,7 +171,8 @@ class SpecDataArray(object):
             if tagn == "filename":
                 self.filename = xmlutil.gettext(child)
             elif tagn == "discount":
-                self.discount = xmlutil.gettext(child)
+                self.remarks = xmlutil.gettext(child)
+                self.discount = not xmlutil.getboolattr(child, "nosupp")
             elif tagn == "modjdate":
                 self.modjdate = xmlutil.getfloat(child)
             elif tagn == "modbjdate":
@@ -160,6 +183,8 @@ class SpecDataArray(object):
                 self.xscale = xmlutil.getfloat(child)
             elif tagn == "yoffset":
                 self.yoffset = xmlutil.getfloat(child)
+            elif tagn == "contslope":
+                self.contslope = xmlutil.getfloat(child)
             elif tagn == "yscale":
                 self.yscale = xmlutil.getfloat(child)
             elif tagn == "hvcorrect":
@@ -169,8 +194,9 @@ class SpecDataArray(object):
         """Save to XML DOM node"""
         node = ET.SubElement(pnode, name)
         xmlutil.savedata(doc, node, "filename", self.filename)
-        if self.discount is not None:
-            xmlutil.savedata(doc, node, "discount", self.discount)
+        if self.remarks is not None:
+            ch = xmlutil.savedata(doc, node, "discount", self.remarks)
+            xmlutil.setboolattr(node, "nosupp", not self.discount)
         if self.modjdate != 0.0:
             xmlutil.savedata(doc, node, "modjdate", self.modjdate)
         if self.modbjdate != 0.0:
@@ -183,6 +209,8 @@ class SpecDataArray(object):
             xmlutil.savedata(doc, node, "yoffset", self.yoffset)
         if self.yscale is not None:
             xmlutil.savedata(doc, node, "yscale", self.yscale)
+        if self.contslope != 0.0:
+            xmlutil.savedata(doc, node, "contslope", self.contslope)
         if self.hvcorrect != 0.0:
             xmlutil.savedata(doc, node, "hvcorrect", self.hvcorrect)
 
@@ -213,12 +241,14 @@ class SpecDataList(object):
                 self.dirname, self.obsfname = os.path.split(fname)
         else:
             self.dirname = self.obsfname = ""
+        self.refwavelength = Default_ref_wavelength
         self.cols = cols
         self.spdcols = spdcols
         self.xoffset = None
         self.xscale = None
         self.yoffset = None
         self.yscale = None
+        self.contslope = 0.0
         self.datalist = []
         self.dirty = False
 
@@ -405,6 +435,7 @@ class SpecDataList(object):
         """Reset any individual scales and offsets"""
         for d in self.datalist:
             d.yscale = d.yoffset = None
+            d.contslope = 0.0
 
     def reset_y(self):
         """Reset the Y scale and offset"""
@@ -422,6 +453,9 @@ class SpecDataList(object):
             yl /= self.yscale
             yu /= self.yscale
             self.yscale = None
+            changes = True
+        if self.contslope != 0.0:
+            self.contslope = 0.0
             changes = True
         if changes:
             if self.maxminy is not None:
@@ -497,6 +531,25 @@ class SpecDataList(object):
             self.yoffset = newoff
         self.dirty = True
 
+    def set_contslope(self, conts):
+        """Set continuum slope"""
+        change = conts - self.contslope
+        if change == 0.0: return
+        self.maxminy = None
+        self.contslope = conts
+        self.dirty = True
+
+    def adj_contslope(self, adj):
+        """Adjust continuum slope"""
+        if adj == 0.0: return
+        self.contslope += adj
+        self.dirty = True
+
+    def set_refwavelength(self, val):
+        """Adjust ref wavelength"""
+        self.refwavelength = val
+        self.dirty = True
+
     def load(self, node):
         """Load control file from XML file"""
         self.dirname = self.obsfname = ""
@@ -506,6 +559,8 @@ class SpecDataList(object):
         self.yoffset = None
         self.xscale = None
         self.yscale = None
+        self.contslope = 0.0
+        self.refwavelength = Default_ref_wavelength
         self.datalist = []
         self.maxminx = None
         self.maxminy = None
@@ -528,6 +583,10 @@ class SpecDataList(object):
                 self.yoffset = xmlutil.getfloat(child)
             elif tagn == "yscale":
                 self.yscale = xmlutil.getfloat(child)
+            elif tagn == "contslope":
+                self.contslope = xmlutil.getfloat(child)
+            elif tagn == "refwavel":
+                self.refwavelength = xmlutil.getfloat(child)
             elif tagn == "maxminx":
                 self.maxminx = datarange.DataRange()
                 self.maxminx.load(child)
@@ -562,6 +621,9 @@ class SpecDataList(object):
             xmlutil.savedata(doc, node, "yoffset", self.yoffset)
         if self.yscale is not None and self.yscale != 1.0:
             xmlutil.savedata(doc, node, "yscale", self.yscale)
+        if self.contslope != 0.0:
+            xmlutil.savedata(doc, node, "contslope", self.contslope)
+        xmlutil.savedata(doc, node, "refwavel", self.refwavelength)
         if self.maxminx is not None:
             self.maxminx.save(doc, node, "maxminx")
         if self.maxminy is not None:
