@@ -69,7 +69,7 @@ class Plotter(object):
         except datarange.DataRangeError as e:
             raise Plotter_error(e.args[0])
 
-    def set_plot(self, plotarray = []):
+    def set_plot(self, plotarray = [], clist = None):
         """Create plot from list of plot files"""
         if len(plotarray) == 0:  return
         if self.xrange is None or self.yrange is None:
@@ -78,44 +78,35 @@ class Plotter(object):
 
         if self.xrange.notused:
             col = self.xrange.rgbcolour()
-            plt.axvline(x=self.xrange.lower, color=col)
-            plt.axvline(x=self.xrange.upper, color=col)    
+            plt.axvline(x=self.xrange.lower, color=col, ls="--")
+            plt.axvline(x=self.xrange.upper, color=col, ls="--")    
         else:
             plt.xlim(self.xrange.lower, self.xrange.upper)
-        if not self.yrange.notused:
+        if self.yrange.notused:
+            col = self.yrange.rgbcolour()
+            plt.axhline(y=self.yrange.lower, color=col, ls="--")
+            plt.axhline(y=self.yrange.upper, color=col, ls="--")
+        else:
             plt.ylim(self.yrange.lower, self.yrange.upper)
 
         for rn in self.ranges.listranges():
             r = self.ranges.getrange(rn)
             col = r.rgbcolour()
-            try:
-                plt.axvline(x=r.lower, color=col)
-            except ValueError:
-                #print "Value Error lower =", r.lower
-                pass
-            try:
-                plt.axvline(x=r.upper, color=col)
-            except ValueError:
-                #print "Value Error upper =", r.upper
-                pass
+            ls = "-"
+            if r.notused: ls = ":"
+            try:    plt.axvline(x=r.lower, color=col, ls=ls)
+            except ValueError: pass
+            try:    plt.axvline(x=r.upper, color=col, ls=ls)
+            except ValueError: pass
 
-        for p in plotarray:
-            plt.plot(p.get_xvalues(), p.get_yvalues())
+        if clist is not None:
+            for c,p in zip(clist,plotarray):
+                plt.plot(p.get_xvalues(), p.get_yvalues(), color=c)
+        else:
+            for p in plotarray:
+                plt.plot(p.get_xvalues(), p.get_yvalues())
         plt.show()
 
     def close(self):
         plt.close()
-
-#class Resultplot:
-#    """Run GNUplot to display results file"""
-
-#    def __init__(self, opts):
-#        self.gp = Gnuplot.Gnuplot()
-#        self.gp("set term x11 size %d,%d" % (opts.width, opts.height))
-
-#    def display(self, filelist):
-#        """Display results filelist assumed in format (filename, starting_time)"""
-
-#        plotcmds = [ "'%s' w l title '%g'" % x for x in filelist ]
-#        self.gp("plot " + string.join(plotcmds, ','))
 

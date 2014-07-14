@@ -1,6 +1,7 @@
 # XML Utility functions
 
 import xml.etree.ElementTree as ET
+import string
 
 class XMLError(Exception):
     """Throw these errors if we get some value etc error"""
@@ -24,10 +25,26 @@ def getfloat(node):
     except ValueError:
         raise XMLError("Invalid float value for " + node.tag)
 
+def getfloatlist(node):
+    """Extract text field from XML node and make a list of floats out of it"""
+    try:
+        return map(lambda x:float(x), string.split(node.text, ","))
+    except ValueError:
+        raise XMLError("Invalid float list for " + node.tag)
+
 def savedata(doc, pnode, name, value):
     """Encode something to an XML file"""
     subnode = ET.SubElement(pnode, name)
     subnode.text = str(value)
+    return subnode
+
+def savefloatlist(doc, pnode, name, value):
+    """Encode a list of floats to an XML file"""
+    subnode = ET.SubElement(pnode, name)
+    if type(value) != 'float' and type(value) != 'int':
+        subnode.text = string.join(map(lambda x:str(x),value),',')
+    else:
+        subnode.text = str(value)
     return subnode
 
 def setboolattr(pnode, name, value):
