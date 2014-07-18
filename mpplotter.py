@@ -1,5 +1,6 @@
 # Plot functions using GNUplot
 
+import matplotlib
 import matplotlib.pyplot as plt
 import string
 import copy
@@ -47,6 +48,8 @@ class Plotter(object):
         self.xrange = None
         self.yrange = None
         self.ranges = datarange.RangeList()
+        self.oldversion = matplotlib.__version__ == '1.0.0'
+        matplotlib.interactive(True)
 
     def set_xrange(self, xr):
         """Set X display range"""
