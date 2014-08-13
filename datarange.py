@@ -68,6 +68,24 @@ class  DataRange(object):
         """Return colour as an RGB constant"""
         return "#%.2x%.2x%.2x" % (self.red, self.green, self.blue)
 
+    def select(self, xvalues, yvalues):
+        """Where xvalues and yvalues are numpy arrays of similar shape,
+
+        select the xvalues from the range and the corresponding yvalues
+        and return the tuple (xvalues, yvalues)"""
+
+        sel = (xvalues >= self.lower) & (xvalues <= self.upper)
+        return (xvalues[sel], yvalues[sel])
+
+    def selectnot(self, xvalues, yvalues):
+        """Where xvalues and yvalues are numpy arrays of similar shape,
+
+        select the xvalues not from the range and the corresponding yvalues
+        and return the tuple"""
+
+        sel = (xvalues < self.lower) | (xvalues > self.upper)
+        return (xvalues[sel], yvalues[sel])
+
     def load(self, node):
         """Load range from XML file"""
         self.description = ""

@@ -9,7 +9,6 @@ import xml.etree.ElementTree as ET
 
 import xmlutil
 import datarange
-import polynomial
 
 class SpecDataError(Exception):
     pass
@@ -98,6 +97,10 @@ class SpecDataArray(object):
         Default is to do so"""
         self.discount = discount
         self.remarks = reason
+        try:
+            self.listlink.dirty = True
+        except AttributeError, TypeError:
+            pass
 
     def is_skipped(self):
         """Return reason for skipping data if applicable otherwise false"""
@@ -154,18 +157,20 @@ class SpecDataArray(object):
 
         try:
             scale = self.listlink.yscale
-            offs = self.listlink.yoffset
+            moffs = self.listlink.yoffset
         except AttributeError, TypeError:
             raise SpecDataError("Link error missing in " + self.filename)
 
-        if self.yscale != 1.0: scale = self.yscale
-        if self.yoffset is not None: offs = self.yoffset
+        scale *= self.yscale
 
         # NB apply offset before we apply scale
 
-        if offs is not None:
-            res = res - polynomial.polyeval(self.get_xvalues(True) - self.listlink.refwavelength, offs)
-        res = res * scale
+        if moffs is not None:
+            res = res / np.polyval(moffs, self.get_xvalues(True) - self.listlink.refwavelength)
+        if self.yoffset is not None:
+            res = res / np.polyval(self.yoffset, self.get_xvalues(True) - self.listlink.refwavelength)
+        if scale != 1.0:
+            res = res * scale
         return res
 
     def getmaxminx(self, inclall = True):
@@ -440,8 +445,12 @@ class SpecDataList(object):
 
     def count_indiv_y(self):
         """Count number of individual scales or offsets in Y values"""
-        return len(filter(lambda d: d.yscale is not None or d.yoffset is not None, self.datalist))
+        return len(filter(lambda d: d.yscale != 1.0 or d.yoffset is not None, self.datalist))
 
+    def count_markers(self):
+        """Count the number discounted"""
+        return len([ d for d in self.datalist if d.discount ])
+    
     def reset_markers(self):
         """Reset any discount markers, return number reset"""
         ndone = 0
