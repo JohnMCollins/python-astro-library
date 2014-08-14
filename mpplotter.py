@@ -44,12 +44,10 @@ class Plotter(object):
     """Class to run matplotlib"""
 
     def __init__(self, opts):
-        plt.rcParams['figure.figsize'] = (opts.width, opts.height)
         self.xrange = None
         self.yrange = None
         self.ranges = datarange.RangeList()
         self.oldversion = matplotlib.__version__ == '1.0.0'
-        matplotlib.interactive(True)
 
     def set_xrange(self, xr):
         """Set X display range"""
