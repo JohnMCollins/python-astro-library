@@ -62,6 +62,8 @@ class SpecDataArray(object):
         # We don't try to combine the two
         self.yscale = 1.0       
         self.yoffset = None
+        self.tmpcoeffs = None
+        self.stddev = 0.0
 
     # Hash function uses mod barycentric date, mistake not to set it
 
