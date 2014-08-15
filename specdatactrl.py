@@ -61,6 +61,11 @@ class SpecDataArray(object):
         # We don't try to combine the two
         self.yscale = 1.0       
         self.yoffset = None
+        
+        # These are for storing stuff when we're doing individual continuum calculations
+
+        self.tmpxvals = None
+        self.tmpyvals = None
         self.tmpcoeffs = None
         self.stddev = 0.0
 
@@ -68,6 +73,12 @@ class SpecDataArray(object):
 
     def __hash__(self):
         return str.__hash__("%.6f" % self.modbjdate)
+    
+    def tmpreset(self):
+        """Fix temp space when iterating individual continua"""
+        self.tmpcoeffs = None
+        self.tmpxvals = None
+        self.tmpyvals = None
 
     def loadfile(self, directory):
         """Load up spectral data from file
@@ -474,6 +485,17 @@ class SpecDataList(object):
                 ndone += 1
         self.dirty = self.dirty or ndone > 0
         return ndone
+    
+    def tmpreset(self):
+        """Clear temp markers"""
+        for d in self.datalist: d.tmpreset()
+    
+    def copy_coeffs(self):
+        """Copy coefficients of continuum calculations across"""
+        for d in self.datalist:
+            d.yoffset = d.tmpcoeffs
+            d.tmpreset()
+        self.dirty = True
 
     def reset_indiv_x(self):
         """Reset any individual scales and offsets. Return whether we did anything"""
