@@ -7,4 +7,3 @@ def hassuffix(st, suff):
     except ValueError:
         pass
     return False
-

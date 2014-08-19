@@ -15,4 +15,3 @@ def mean_value(rangev, xvalues, yvalues):
     sxv = xvalues[sel]
     integ = si.trapz(yvalues[sel], sxv)
     return (max(sxv)-min(sxv), integ)
-
