@@ -76,6 +76,10 @@ class Plotter(object):
         if self.xrange is None or self.yrange is None:
             raise Plotter_error("X and Y ranges not set")
         plt.clf()
+        ax = plt.gca()
+        ax.get_xaxis().get_major_formatter().set_useOffset(False)
+        ax.set_xlabel(r'Wavelength $ (\AA)$')
+        ax.set_ylabel('Intensity')
 
         if self.xrange.notused:
             col = self.xrange.rgbcolour()
@@ -110,4 +114,8 @@ class Plotter(object):
 
     def close(self):
         plt.close()
+        
+    def savefig(self, pltfile):
+        """Save current figure to file name given"""
+        plt.gcf().savefig(pltfile)
 
