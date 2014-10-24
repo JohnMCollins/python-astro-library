@@ -280,12 +280,14 @@ class SpecDataList(object):
         # the spectra files.
 
         if len(obsfname) != 0:
-            if os.path.isabs(obsfname):
-                self.dirname, self.obsfname = os.path.split(obsfname)
+            p = os.path.normpath(os.path.join(os.getcwd(), obsfname))
+            if os.path.isfile(p):
+                self.dirname, self.obsfname = os.path.split(p)
+            elif os.path.isdir(p):
+                self.dirname = p
+                self.guessobsfile()
             else:
-                cdir = os.getcwd()
-                fname = os.path.join(cdir, obsfname)
-                self.dirname, self.obsfname = os.path.split(fname)
+                raise SpecDataError("Cannot open obs dir/file " + p)
         else:
             self.dirname = self.obsfname = ""
 
@@ -296,7 +298,21 @@ class SpecDataList(object):
         # These are the names of columns in the obs file and the spectral data files
         self.cols = cols
         self.spdcols = spdcols
+        
+        self.resetall()
 
+        # Set this to remember that we've made changes and need to save them
+        self.dirty = False
+
+        # These are set up and used in the parsing routines
+        self.currentfile = ""
+        self.modjdate = 0.0
+        self.modbjdate = 0.0
+        self.hvcorrect = 0.0
+        
+    def resetall(self):
+        """Reset all parameters after changing things"""
+        
         # These are the offset and scale for X values.
         # We apply any individual scales and offsets separately
 
@@ -315,15 +331,66 @@ class SpecDataList(object):
         self.datalist = []
         self.maxminx = None
         self.maxminy = None
-
-        # Set this to remember that we've made changes and need to save them
-        self.dirty = False
-
-        # These are set up and used in the parsing routines
-        self.currentfile = ""
-        self.modjdate = 0.0
-        self.modbjdate = 0.0
-        self.hvcorrect = 0.0
+        
+    def set_dirname(self, dir):
+        """Set the observation directory as given"""
+        dir = os.path.abspath(dir)
+        if not os.path.isdir(dir):
+            raise SpecDataError("Invalid directory: " + dir)
+        self.resetall()
+        self.dirname = dir
+        self.guessobsfile()
+        self.dirty = True
+        
+    def set_filename(self, file):
+        """Set the observation file as given.
+        Possibly reset the directory"""
+        file = os.path.abspath(file)
+        if not os.path.isfile(file):
+            raise SpecDataError("Invalid file: " + file)
+        dir, basefile = os.path.split(file)
+        if dir == self.dirname and basefile == self.obsfname: return
+        self.resetall()
+        self.dirname = dir
+        self.obsfname = basefile
+        self.dirty = True
+        
+    def classify_files(self):
+        """Read file names in observations directory.
+        Of the file names read return the prefix (we use first 5 chars)
+        of the most common prefix file and the file name of any other file
+        if there's only one"""
+        
+        filelist = glob.glob(self.dirname + '/*')
+        occs = dict()
+        for f5 in [os.path.basename(ff)[0:5] for ff in filelist]:
+            try:
+                occs[f5] = occs[f5] + 1
+            except KeyError:
+                occs[f5] = 1
+        revoccs = dict()
+        for k,v in occs.items():
+            revoccs[v] = k
+        dprefix = revoccs[max(occs.values())]
+        if len(occs) == 2 and min(occs.values()) == 1:
+            fprefix = revoccs[1]
+            oflist = glob.glob(self.dirname + '/' + fprefix + '*')
+            return (dprefix, oflist[0])
+        return (dprefix, "")
+                
+    def guessobsfile(self):
+        """Try to figure out the name of the observation file having got the
+        directory"""
+        dprefix, obsf = self.classify_files()
+        self.obsfname = obsf
+        
+    def getdatafilenames(self):
+        """Get a sorted list of the data files"""
+        dprefix, obsf = self.classify_files()
+        filelist = glob.glob(self.dirname + '/' + dprefix + '*')
+        filelist = map(lambda x: os.path.basename(x), filelist)
+        filelist.sort()
+        return  filelist
 
     # The following routines are automatically invoked during the parsing
     #####################################################################
@@ -369,24 +436,12 @@ class SpecDataList(object):
         except IOError as e:
             raise SpecDataError("Cannot open obs time file - " + e.args[0])
 
-        # Attempt to work out name of spectral data files assuming that the first 5 chars of the names is the same
+        filelist = self.getdatafilenames()
+        nfiles = len(filelist)
+        if nfiles < 1:
+            raise SpecDataError("Unable to find any spectrum files")
 
-        filelist = glob.glob(self.dirname + '/*')
-        occs = dict()
-        for f5 in [os.path.basename(ff)[0:5] for ff in filelist]:
-            try:
-                occs[f5] = occs[f5] + 1
-            except KeyError:
-                occs[f5] = 1
-        revoccs = dict()
-        for k,v in occs.items():
-            revoccs[v] = k
-        prefix = revoccs[max(occs.values())]
-        filelist = glob.glob(self.dirname + '/' + prefix + '*')
-        filelist = map(lambda x: os.path.basename(x), filelist)
-        filelist.sort()
-
-        # We now should have a sorted list of files in filelist
+        # No parse each file
         
         self.datalist = []
         reparser = re.compile("\s+")
@@ -394,7 +449,10 @@ class SpecDataList(object):
             line = string.strip(line)
             if len(line) == 0: continue
             data = reparser.split(line)
-            self.currentfile = filelist.pop(0)
+            try:
+                self.currentfile = filelist.pop(0)
+            except IndexError:
+                raise SpecDataError("Too few spectrum files " + str(nfiles) + " found to match observation file")
             self.modjdate = 0.0
             self.modbjdate = 0.0
             self.hvcorrect = 0.0
@@ -411,6 +469,8 @@ class SpecDataList(object):
             newarray = SpecDataArray(self.currentfile, self.spdcols, self.modjdate, self.modbjdate, self.hvcorrect)
             newarray.listlink = self
             self.datalist.append(newarray)
+        if len(filelist) != 0:
+            raise SpecDataError("Too many files found " + str(nfiles) + " found to match observation file")
         fin.close()
 
     def loadfiles(self, flist = None):

@@ -8,7 +8,7 @@ class UTC(datetime.tzinfo):
     """Implementation of dates in UTC only"""
 
     def utcoffset(self, dt):
-        return 0
+        return datetime.timedelta(0)
     def dst(self, dt):
         return None
     def tzname(self):
@@ -20,11 +20,11 @@ def jdate_to_datetime(jd):
     """Convert Julian Date to Datetime structure"""
 
     if jd >= 1e6:
-        fr, J = math.modf(jd + 0.5)
-        J = int(J + 0.5)
-    else:
         fr, J = math.modf(jd)
-        J = int(J) + 2400001
+        J = int(J)
+    else:
+        fr, J = math.modf(jd - 0.5)
+        J = int(J) + 2400000
 
     p = J + 68569
     q = 4 * p / 146097
@@ -55,13 +55,14 @@ def datetime_to_jdate(dt, modified = True):
     y1 = (dt.year + 4800)
     jd = 1461 * (y1+m1) / 4 + 367 * (dt.month-2-12*m1)/ 12 - (3 * ((y1+m1+100)/100)) / 4 + dt.day - 32076
     if modified:
-        jd -= 2400000
+        jd -= 2400001
         jd = float(jd)
     else:
-        jd += 0.5
+        jd -= 0.5
     tim = (dt.hour + (dt.minute + (dt.second + dt.microsecond / 1e6) / 60.0) / 60.0) / 24.0
     return jd + tim
 
-
-        
-
+def display(jd):
+    """Convert a Julian date to a date/time string"""
+    when = jdate_to_datetime(jd)
+    return "%.2d/%.2d/%.2d %.2d:%.2d" % (when.day, when.month, when.year % 100, when.hour, when.minute)  

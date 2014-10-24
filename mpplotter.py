@@ -70,7 +70,7 @@ class Plotter(object):
         except datarange.DataRangeError as e:
             raise Plotter_error(e.args[0])
 
-    def set_plot(self, plotarray = [], clist = None):
+    def set_plot(self, plotarray = [], clist = None, leglist = None):
         """Create plot from list of plot files"""
         if len(plotarray) == 0:  return
         if self.xrange is None or self.yrange is None:
@@ -104,12 +104,17 @@ class Plotter(object):
             try:    plt.axvline(x=r.upper, color=col, ls=ls)
             except ValueError: pass
 
+        linelist = []
         if clist is not None:
             for c,p in zip(clist,plotarray):
-                plt.plot(p.get_xvalues(), p.get_yvalues(), color=c)
+                line, = plt.plot(p.get_xvalues(), p.get_yvalues(), color=c)
+                linelist.append(line)
         else:
             for p in plotarray:
-                plt.plot(p.get_xvalues(), p.get_yvalues())
+                line, = plt.plot(p.get_xvalues(), p.get_yvalues())
+                linelist.append(line)
+        if leglist is not None:
+            plt.legend(linelist, leglist)
         plt.show()
 
     def close(self):
