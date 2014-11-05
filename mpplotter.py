@@ -9,41 +9,26 @@ import xml.etree.ElementTree as ET
 import datarange
 import xmlutil
 
+# Record of current widths and heights we are using
+
+Cwidth = 15.0
+Cheight = 10.0
+
 class Plotter_error(Exception):
     """Throw this class if something goes wrong with the plot"""
     pass
 
-class Plotter_options(object):
-    """Options to remember options for plotting with"""
-
-    def __init__(self):
-        self.width = 15
-        self.height = 10
-
-    def setdims(self, width = None, height = None):
-        """Set dimensions as required"""
-        if width is not None: self.width = width
-        if height is not None: self.height = height
-
-    def load(self, node):
-        """Load settings from XML file"""
-        for child in node:
-            tagn = child.tag
-            if tagn == "width":
-                self.width = xmlutil.getint(child)
-            elif tagn == "height":
-                self.height = xmlutil.getint(child)
-
-    def save(self, doc, pnode, name):
-        """Save settings to XML file"""
-        node = ET.SubElement(pnode, name)
-        xmlutil.savedata(doc, node, "width", self.width)
-        xmlutil.savedata(doc, node, "height", self.height)
+def Setdims(width = None, height = None):
+    """Set dimensions of Window"""
+    global Cwidth, Cheight
+    if width is not None: Cwidth = width
+    if height is not None: Cheight = height
+    plt.rcParams['figure.figsize'] = (Cwidth, Cheight)
 
 class Plotter(object):
     """Class to run matplotlib"""
 
-    def __init__(self, opts):
+    def __init__(self):
         self.xrange = None
         self.yrange = None
         self.ranges = datarange.RangeList()
