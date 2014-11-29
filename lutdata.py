@@ -54,11 +54,14 @@ class Lutdata(object):
         if len(line2) != 6:
             raise LUTError("Expecting second line of file to have 6 fields but found " + str(len(line2)))
         
-        self.mint4, selfmaxt4, self.minv, self.maxv, self.minla, self.maxla = line2
+        self.mint4, self.maxt4, self.minv, self.maxv, self.minla, self.maxla = line2
         
         # Slurp up rest of data in one swell foop
 
-        arr = numpy.loadtxt(fin)
+        try:
+            arr = numpy.loadtxt(fin)
+        except ValueError:
+            raise LUTError("Invalid float fields in LUT file")
 
         # Check we've got what we expect
 
@@ -89,5 +92,3 @@ class Lutdata(object):
                 fin.close()
         else:
             return self._loaddata(f)
-
-
