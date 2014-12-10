@@ -40,3 +40,23 @@ def getrangearg(argparsevar, rangename="range", lowerarg="lower", upperarg="uppe
         return  (ulim, llim)
     return  (llim, ulim)
 
+def parserange(arg):
+    """Parse a range argument, either a single floating point number, in which case assume other end is zero,
+    or a pair. If only a single number add zero. Return a sorted result"""
+    
+    if arg is None: return None
+    
+    bits = string.split(arg, ',')
+    try:
+        if len(bits) == 1:
+            ret = [0, float(arg)]
+        elif len(bits) == 2:
+            ret = map(lambda x: float(x), bits)
+        else:
+            raise ValueError
+    except:
+        print "Did not understand range value of", arg
+        return None
+    
+    ret.sort()
+    return ret
