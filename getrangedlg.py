@@ -13,6 +13,22 @@ import matplotlib.pyplot as plt
 import ui_getrangedlg
 import calcticks
 
+def rangeadj(lobox, hibox, loadj, hiadj):
+    """Adjust range limit spin boxes by given adjustments
+
+    Don't do anything if the result would make the low value >= high value or either below minimum
+    or maximum"""
+
+    lomin = lobox.minimum()
+    himax = hibox.maximum()
+    loval = lobox.value()
+    hival = hibox.value()
+    nlo = loval + loadj
+    nhi = hival + hiadj
+    if  nlo < lomin or nhi > himax or nlo >= nhi: return
+    if  nlo != loval: lobox.setValue(nlo)
+    if  nhi != hival: hibox.setValue(nhi)
+
 class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
 
     def __init__(self, parent = None, width = 15, height = 10):
@@ -31,6 +47,7 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
         self.height = height
         self.xtit = None
         self.ytit = None
+        self.hangon = False
 
     def copyin_range(self, x_range = None, s_range = None):
         """Copy in ranges from parameters at start"""
@@ -127,7 +144,21 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
 
         plt.show()
         self.already = True
- 
+    
+    def getxamounts(self):
+        """Get adjustments for X range"""
+        amt = float(self.adjby.currentText())
+        lamt = amt
+        ramt = -amt
+        if self.zoomout.isChecked():
+            lamt = -amt
+            ramt = amt
+        if self.zleft.isChecked():
+            ramt = 0.0
+        elif self.zright.isChecked():
+            lamt = 0.0
+        return (lamt, ramt)      
+
     def on_xrangemin_valueChanged(self, value):
         if isinstance(value, QString): return
         self.updateplot()
@@ -139,6 +170,34 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
     def on_selectx_stateChanged(self, b = None):
         if b is None: return
         self.updateplot()
+    
+    def on_adjustx_clicked(self, b = None):
+        if b is None: return
+        amt = float(self.adjby.currentText())
+        lamt = amt
+        ramt = -amt
+        if self.zoomout.isChecked():
+            lamt = -amt
+            ramt = amt
+        if self.zleft.isChecked():
+            ramt = 0.0
+        elif self.zright.isChecked():
+            lamt = 0.0
+        rangeadj(self.xrangemin, self.xrangemax, lamt, ramt)
+    
+    def on_adjrange_clicked(self, b = None):
+        if b is None: return
+        amt = float(self.radjby.currentText())
+        lamt = amt
+        ramt = -amt
+        if self.rzoomout.isChecked():
+            lamt = -amt
+            ramt = amt
+        if self.rzleft.isChecked():
+            ramt = 0.0
+        elif self.rzright.isChecked():
+            lamt = 0.0
+        rangeadj(self.srmin, self.srmax, lamt, ramt)
 
     def on_selcolour_clicked(self, b = None):
         if b is None: return
@@ -154,72 +213,14 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
     def on_srmax_valueChanged(self, value):
         self.updateplot()
 
-    def incdec_range(self, b, lfld, ufld, lamt, uamt):
-        if b is None: return
-        clval = lfld.value()
-        cuval = ufld.value()
-        nlval = clval + lamt
-        nuval = cuval + uamt
-        if nlval >= nuval:  return
-        if nlval < lfld.minimum(): nlval = lfld.minimum()
-        if nuval > ufld.maximum(): nuval = ufld.maximum()
-        if nlval != clval: lfld.setValue(nlval)
-        if nuval != cuval: ufld.setValue(nuval)
-
     def on_datafiles_itemSelectionChanged(self):
+        if self.hangon: return
         self.updateplot()
  
-    def on_rlp1_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 1.0, 0.0)
-    def on_rlp5_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 5.0, 0.0)
-    def on_rlpp1_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 0.1, 0.0)
-    def on_rlpp5_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 0.5, 0.0)
-    def on_rlmp1_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, -0.1, 0.0)
-    def on_rlmp5_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, -0.5, 0.0)
-    def on_rlm1_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, -1.0, 0.0)
-    def on_rlm5_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, -5.0, 0.0)
-
-    def on_rup1_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 0.0, 1.0)
-    def on_rup5_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 0.0, 5.0)
-    def on_rupp1_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 0.0, 0.1)
-    def on_rupp5_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 0.0, 0.5)
-    def on_rump1_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 0.0, -0.1)
-    def on_rump5_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 0.0, -0.5)
-    def on_rum1_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 0.0, -1.0)
-    def on_rum5_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 0.0, -5.0)
-
-    def on_rbp1_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 1.0, -1.0)
-    def on_rbp5_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 5.0, -5.0)
-    def on_rbpp1_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 0.1, -0.1)
-    def on_rbpp5_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, 0.5, -0.5)
-    def on_rbmp1_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, -0.1, 1.0)
-    def on_rbmp5_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, -0.5, 0.5)
-    def on_rbm1_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, -1.0, 1.0)
-    def on_rbm5_clicked(self, b = None): self.incdec_range(b, self.xrangemin, self.xrangemax, -5.0, 5.0)
-
-    def on_srlp1_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 1.0, 0.0)
-    def on_srlp5_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 5.0, 0.0)
-    def on_srlpp1_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 0.1, 0.0)
-    def on_srlpp5_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 0.5, 0.0)
-    def on_srlmp1_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, -0.1, 0.0)
-    def on_srlmp5_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, -0.5, 0.0)
-    def on_srlm1_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, -1.0, 0.0)
-    def on_srlm5_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, -5.0, 0.0)
-
-    def on_srup1_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 0.0, 1.0)
-    def on_srup5_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 0.0, 5.0)
-    def on_srupp1_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 0.0, 0.1)
-    def on_srupp5_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 0.0, 0.5)
-    def on_srump1_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 0.0, -0.1)
-    def on_srump5_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 0.0, -0.5)
-    def on_srum1_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 0.0, -1.0)
-    def on_srum5_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 0.0, -5.0)
-
-    def on_srbp1_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 1.0, -1.0)
-    def on_srbp5_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 5.0, -5.0)
-    def on_srbpp1_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 0.1, -0.1)
-    def on_srbpp5_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, 0.5, -0.5)
-    def on_srbmp1_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, -0.1, 0.1)
-    def on_srbmp5_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, -0.5, 0.5)
-    def on_srbm1_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, -1.0, 1.0)
-    def on_srbm5_clicked(self, b = None): self.incdec_range(b, self.srmin, self.srmax, -5.0, 5.0)
-
+    def on_selectall_clicked(self, b = None):
+        if b is None: return
+        self.hangon = True
+        for row in xrange(0, self.datafiles.count()):
+            self.datafiles.item(row).setSelected(True)
+        self.hangon = False
+        self.updateplot()
