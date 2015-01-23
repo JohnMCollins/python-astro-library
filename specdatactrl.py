@@ -273,7 +273,8 @@ def parse_mjd(field):
 class SpecDataList(object):
     """This class contains a list of spectral data"""
 
-    def __init__(self, obsfname = "", cols = ('specfile', 'modjdate', 'modbjdate', 'hvcorrect'), spdcols = ('xvalues','yvalues')):
+    #def __init__(self, obsfname = "", cols = ('specfile', 'modjdate', 'modbjdate', 'hvcorrect'), spdcols = ('xvalues','yvalues')):
+    def __init__(self, obsfname = "", cols = ('modbjdate',), spdcols = ('xvalues','yvalues')):
         
         # If file name is given, initialise directory and observation files name
         # Do this because most of the time the obs file is in the same directory as
@@ -470,7 +471,7 @@ class SpecDataList(object):
             newarray.listlink = self
             self.datalist.append(newarray)
         if len(filelist) != 0:
-            raise SpecDataError("Too many files found " + str(nfiles) + " found to match observation file")
+            raise SpecDataError("Too many files found " + str(nfiles) + " found to match observation file " + str(len(filelist)) + " left over")
         fin.close()
 
     def loadfiles(self, flist = None):

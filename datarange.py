@@ -210,11 +210,11 @@ def init_default_ranges():
     """Create default range set"""
     
     ret = RangeList()
-    ret.setrange(DataRange(lbound = 6500.0, ubound = 6650.0, descr = "X axis display range", shortname = "xrange", notused=True))
+    ret.setrange(DataRange(lbound = 6560.31, ubound = 6566.28, descr = "X axis display range", shortname = "xrange", notused=True))
     ret.setrange(DataRange(lbound = 0.0, ubound = 3.0, descr = "Y axis display range", shortname = "yrange", notused=True))
-    ret.setrange(DataRange(lbound = 6560.3, ubound = 6561.0, descr = "Continuum blue", shortname = "contblue", blue=128))
-    ret.setrange(DataRange(lbound = 6563.0, ubound = 6620.0, descr = "Continuum red", shortname = "contred", red=128))
-    ret.setrange(DataRange(lbound = 6561.46, ubound = 6561.7, descr = "Integration section 1", shortname = "integ1", green=200, blue=200))
-    ret.setrange(DataRange(lbound = 6562.06, ubound = 6562.3, descr = "Integration section 2", shortname = "integ2", red=200, green=200))
+    ret.setrange(DataRange(lbound = 6560.3, ubound = 6561.6, descr = "Continuum blue", shortname = "contblue", blue=128))
+    ret.setrange(DataRange(lbound = 6565.4, ubound = 6620.5, descr = "Continuum red", shortname = "contred", red=128))
+    ret.setrange(DataRange(lbound = 6561.8, ubound = 6563.8, descr = "H Alpha peak", shortname = "halpha", red=255))
+    #ret.setrange(DataRange(lbound = 6561.46, ubound = 6561.7, descr = "Integration section 1", shortname = "integ1", green=200, blue=200))
+    #ret.setrange(DataRange(lbound = 6562.06, ubound = 6562.3, descr = "Integration section 2", shortname = "integ2", red=200, green=200))
     return ret
-
