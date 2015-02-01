@@ -34,8 +34,6 @@ def _dotsdata(fin, skiplines):
         result.extend(parts)
 
     dims.reverse()
-    print "dims=", dims
-    print "array=", numpy.array(result).shape
     return numpy.array(result).reshape(dims)
 
 def dotsdata(f, skiplines=0):
