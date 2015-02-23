@@ -3,6 +3,32 @@
 import numpy as np
 import scipy.signal as ss
 
+ERR_OK = 0
+ERR_ZEROAMPS = 1
+ERR_NOMAXES = 2
+ERR_NOSIGMAXES = 3
+ERR_EXCESSMAXES = 4
+ERR_EXCESSMINS = 5
+ERR_TOOFEWPTS = 6
+
+Messages = ('OK',
+            'Found -ve or zero amps',
+            'Could not find any maxima'
+            'Could not find significant maxima',
+            'More than 2 maxima, cannot currently understand',
+            'Only one maximum but > 0 minima',
+            'Not enough points between maxima to find minimum')
+
+class FindProfileError(Exception):
+    """Class for returning errors in profile finding.
+    
+    We take a code which also corresponds to the message as defined above"""
+    
+    def __init__(self, code):
+        global Messages
+        super(FindProfileError, self).__init__(Messages[code])
+        self.code = code
+
 class Specprofile(object):
     """Class for representing type of spectral line"""
     
@@ -15,7 +41,6 @@ class Specprofile(object):
         self.minima = None                  # Ditto for minima
         self.ewinds = None                  # Indices we use for EW
         self.valid = False                  # Result currently valid
-        self.comment = None                 # Comment to pass back
         self.passnum = 0                    # Pass number evaluated on
         self.degfit = degfit                # Degree of polynomial fit
         
@@ -71,20 +96,19 @@ class Specprofile(object):
         # (assume we're working with emission lines right now)
         
         self.passnum = 1
-        self.comment = ""
-    
+        
         if len(specmax) == 0:
-            self.comment = "No maximum found"
-            return  False
+            raise FindProfileError(ERR_NOMAXES)
         
         # If one maximum and no minimum just assume a single peak
         # or if two maximum and one minimum we don't have to try too hard
-            
+        
+        print "Specmax =", specmax, "Specmin =", specmin
         if len(specmax) == 1:
             if len(specmin) == 0:
                 return  self.setresult(specmax, specmin, intthresh)
         elif len(specmax) == 2:
-            if len(specmin) == 1:
+            if len(specmin) == 1 and specmax[0] < specmin[0] < specmax[1]:
                 return  self.setresult(specmax, specmin, intthresh)
         
         # OK we have to try a bit harder,
@@ -92,7 +116,7 @@ class Specprofile(object):
         
         self.passnum += 1
         if minamp <= 0.0:
-            self.comment = "Found -ve or zero amps"
+            raise FindProfileError(ERR_ZEROAMPS)
         
         # Refine list of maxima and minima to be ones above significance threshold
         # (Remember we are always working with a list of indices into the original
@@ -101,25 +125,26 @@ class Specprofile(object):
         threshamp = (maxamp - minamp) * sigthreash + minamp
         sigmax = specmax[amps[specmax] >= threshamp]
         sigmin = specmin[amps[specmin] >= threshamp]
+        print "Sigmax =", sigmax, "Sigmin =", sigmin
  
         # If we can't find a maximum now we can't currently figure it out
         
         if len(sigmax) == 0:
-             self.comment = "Could not find significant maxima"
-             return False
+             raise FindProfileError(ERR_NOSIGMAXES)
          
         if len(sigmax) > 2:
-            self.comment = "More than 2 maxima, cannot currently understand"
             self.maxima = sigmax
-            return False
+            self.minima = sigmin
+            raise FindProfileError(ERR_EXCESSMAXES)
         
         # If only one maximum, we think we're OK if we don't have any minima, otherwise we are confused
         
         if len(sigmax) == 1:
             if len(sigmin) == 0:
                 return self.setresult(sigmax, sigmin, intthresh)
-            self.comment = "Only one maximum but > 0 minima"
-            return  False
+            self.maxima = sigmax
+            self.minima = sigmin
+            raise FindProfileError(ERR_EXCESSMINS)
         
         # Case where we have two maxima
         # If we have one minimum in between we are probably OK
@@ -143,12 +168,12 @@ class Specprofile(object):
         self.passnum += 1
         
         if lhmax >= rhmax - 5:
-            self.comment = "not enough points between maxima to find minimum"
-            return  False
+            self.maxima = sigmax
+            raise FindProfileError(ERR_TOOFEWPTS)
         
         restrwl = offset_wls[lhmax:rhmax+1]
         restamp = amps[lhmax:rhmax+1]
-        coeffs = np.polyfit(restrwl, restramp, self.degfit)
+        coeffs = np.polyfit(restrwl, restamp, self.degfit)
         pvals = np.polyval(coeffs, restrwl)
         
         # For time being just get lowest value of pvals
