@@ -8,7 +8,7 @@ def rewrite_equal(wls, amps):
     amplitudes, so we rewrite amplitudes which are equal by fitting the points in question
     and the two either side to a quadratic and replacing the values"""
     
-    tamps = amps + 0.0
+    tamps = amps + 0.0      # Force copy
     la = len(tamps)
     zeroinds = np.where(tamps[0:la-1] == tamps[1:la])[0]
     zeroinds = zeroinds[(zeroinds > 1) & (zeroinds < la-1)]
@@ -48,7 +48,7 @@ class FindProfileError(Exception):
 class Specprofile(object):
     """Class for representing type of spectral line"""
     
-    def __init__(self, degfit = 20):
+    def __init__(self, degfit = 20, ignoreedge = 5.0):
         
         self.twinpeaks = False              # Has twin-peaked "horn" format
         self.wavelengths = None             # A numpy array
@@ -56,7 +56,7 @@ class Specprofile(object):
         self.maxima = None                  # List of indices into above for maxima
         self.minima = None                  # Ditto for minima
         self.ewinds = None                  # Indices we use for EW
-        self.valid = False                  # Result currently valid
+        self.ignoreedge = ignoreedge        # Limit on edges we ignore
         self.passnum = 0                    # Pass number evaluated on
         self.degfit = degfit                # Degree of polynomial fit
         
@@ -66,9 +66,11 @@ class Specprofile(object):
         self.maxima = maxima
         self.minima = minima
         
-        self.twinpeaks = len(maxima) == 2
         lhmax = maxima[0]
         rhmax = maxima[-1]
+        
+        self.twinpeaks = len(maxima) == 2 and lhmax < rhmax - 3
+
         ithr = intthresh + 1.0
         
         bthresh = np.argwhere(self.amplitudes < ithr).flatten()
@@ -108,6 +110,11 @@ class Specprofile(object):
         
         specmax = ss.argrelmax(amps)[0]
         specmin = ss.argrelmin(amps)[0]
+        
+        ignoreable = int(self.ignoreedge * len(amps) / 100.0)
+        ignoreafter = len(amps) - ignoreable
+        specmax = specmax[(specmax > ignoreable) & (specmax <= ignoreafter)]
+        specmin = specmin[(specmin > ignoreable) & (specmin <= ignoreafter)]
         
         # If no maxima at all, we can't currently identify it
         # (assume we're working with emission lines right now)
