@@ -3,6 +3,22 @@
 import numpy as np
 import scipy.signal as ss
 
+def rewrite_equal(wls, amps):
+    """ss.argrelmax and ss.argrelmin don't work very well (at all) if there are equal value
+    amplitudes, so we rewrite amplitudes which are equal by fitting the points in question
+    and the two either side to a quadratic and replacing the values"""
+    
+    tamps = amps + 0.0
+    la = len(tamps)
+    zeroinds = np.where(tamps[0:la-1] == tamps[1:la])[0]
+    zeroinds = zeroinds[(zeroinds > 1) & (zeroinds < la-1)]
+    for zi in zeroinds:
+        wlseg = wls[zi-1:zi+3]
+        ampseg = tamps[zi-1:zi+3]
+        c = np.polyfit(wlseg, ampseg, 2)
+        tamps[zi:zi+2] = np.polyval(c, wlseg[1:3])
+    return tamps
+
 ERR_OK = 0
 ERR_ZEROAMPS = 1
 ERR_NOMAXES = 2
@@ -69,7 +85,7 @@ class Specprofile(object):
         self.ewinds = (leftew, rightew)
         return  True
         
-    def calcprofile(self, wavelengths, amps, central = 6563.0, sigthreash = 0.5, intthresh = 0.1):
+    def calcprofile(self, wavelengths, amps, central = 6563.0, sigthresh = 0.5, intthresh = 0.1):
         """Calculate the profile shape.
         
         Supply wavelengths and amplitudes
@@ -84,6 +100,7 @@ class Specprofile(object):
         # Get min and max amplitude
         
         offset_wls = wavelengths - central
+        amps = rewrite_equal(offset_wls, amps)
         minamp = np.min(amps)
         maxamp = np.max(amps)
         
@@ -103,7 +120,6 @@ class Specprofile(object):
         # If one maximum and no minimum just assume a single peak
         # or if two maximum and one minimum we don't have to try too hard
         
-        print "Specmax =", specmax, "Specmin =", specmin
         if len(specmax) == 1:
             if len(specmin) == 0:
                 return  self.setresult(specmax, specmin, intthresh)
@@ -122,13 +138,12 @@ class Specprofile(object):
         # (Remember we are always working with a list of indices into the original
         # wavelength and amplitude arrays)
         
-        threshamp = (maxamp - minamp) * sigthreash + minamp
+        threshamp = (maxamp - minamp) * sigthresh + minamp
         sigmax = specmax[amps[specmax] >= threshamp]
         sigmin = specmin[amps[specmin] >= threshamp]
-        print "Sigmax =", sigmax, "Sigmin =", sigmin
- 
+
         # If we can't find a maximum now we can't currently figure it out
-        
+
         if len(sigmax) == 0:
              raise FindProfileError(ERR_NOSIGMAXES)
          
