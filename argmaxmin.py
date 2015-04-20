@@ -28,3 +28,15 @@ def argrelmin(wls, amps):
     """Do argrelmin but fit a quadaratic where necessary to avoid problems with straddling a maximum"""
     
     return  ss.argrelmin(rewrite_equal(wls, amps))[0]
+
+def maxmaxes(wls, amps):
+    """Return maxima in descending sorted order of value"""
+    maxes = argrelmax(wls, amps)
+    order = np.argsort(-amps[maxes])
+    return maxes[order]
+
+def minmins(wls, amps):
+    """Return minima in ascending sorted order of value"""
+    maxes = argrelmin(wls, amps)
+    order = np.argsort(amps[maxes])
+    return maxes[order]
