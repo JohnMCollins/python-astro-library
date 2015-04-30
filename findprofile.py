@@ -2,22 +2,7 @@
 
 import numpy as np
 import scipy.signal as ss
-
-def rewrite_equal(wls, amps):
-    """ss.argrelmax and ss.argrelmin don't work very well (at all) if there are equal value
-    amplitudes, so we rewrite amplitudes which are equal by fitting the points in question
-    and the two either side to a quadratic and replacing the values"""
-    
-    tamps = amps + 0.0      # Force copy
-    la = len(tamps)
-    zeroinds = np.where(tamps[0:la-1] == tamps[1:la])[0]
-    zeroinds = zeroinds[(zeroinds > 1) & (zeroinds < la-1)]
-    for zi in zeroinds:
-        wlseg = wls[zi-1:zi+3]
-        ampseg = tamps[zi-1:zi+3]
-        c = np.polyfit(wlseg, ampseg, 2)
-        tamps[zi:zi+2] = np.polyval(c, wlseg[1:3])
-    return tamps
+import argmaxmin
 
 ERR_OK = 0
 ERR_ZEROAMPS = 1
@@ -44,6 +29,30 @@ class FindProfileError(Exception):
         global Messages
         super(FindProfileError, self).__init__(Messages[code])
         self.code = code
+
+def hasmaxminmax(maxes, mins):
+    """Check in maxes and mins for consecutive max,min,max"""
+
+    for m in maxes:
+        if m+1 in mins and m+2 in maxes:
+            return True
+    return False
+
+def removemaxminmax(maxes, mins):
+    """Remove max,min,max consecutive indices from maxes and mins.
+
+    Replace with max where min was"""
+
+    resmaxes = list(maxes)
+    resmins = list(mins)
+
+    for m in maxes:
+        if m+1 in mins and m+2 in maxes:
+            resmins.remove(m+1)
+            resmaxes.remove(m+2)
+            resmaxes[resmaxes.index(m)] = m+1
+
+    return (np.array(resmaxes),np.array(resmins))
 
 class Specprofile(object):
     """Class for representing type of spectral line"""
@@ -102,14 +111,20 @@ class Specprofile(object):
         # Get min and max amplitude
         
         offset_wls = wavelengths - central
-        amps = rewrite_equal(offset_wls, amps)
         minamp = np.min(amps)
         maxamp = np.max(amps)
         
         # Get indices of maxima and minima
         
-        specmax = ss.argrelmax(amps)[0]
-        specmin = ss.argrelmin(amps)[0]
+        specmax = argmaxmin.argrelmax(offset_wls, amps)
+        specmin = argmaxmin.argrelmin(offset_wls, amps)
+
+        # Remove cases of consecutive max,min,max which sometimes happens
+
+        if hasmaxminmax(specmax,specmin):
+            specmax, specmin = removemaxminmax(specmax, specmin)
+        if hasmaxminmax(specmin,specmax):
+            specmin, specmax = removemaxminmax(specmin, specmax)
         
         ignoreable = int(self.ignoreedge * len(amps) / 100.0)
         ignoreafter = len(amps) - ignoreable
