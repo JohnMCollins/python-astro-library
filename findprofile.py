@@ -96,7 +96,7 @@ class Specprofile(object):
         self.ewinds = (leftew, rightew)
         return  True
         
-    def calcprofile(self, wavelengths, amps, central = 6563.0, sigthresh = 0.5, intthresh = 0.1):
+    def calcprofile(self, wavelengths, amps, central = 6563.0, decs = 5, sigthresh = 0.5, intthresh = 0.1):
         """Calculate the profile shape.
         
         Supply wavelengths and amplitudes
@@ -111,13 +111,14 @@ class Specprofile(object):
         # Get min and max amplitude
         
         offset_wls = wavelengths - central
-        minamp = np.min(amps)
-        maxamp = np.max(amps)
+        roundedamps = np.round(amps, decs)
+        minamp = np.min(roundedamps)
+        maxamp = np.max(roundedamps)
         
         # Get indices of maxima and minima
         
-        specmax = argmaxmin.argrelmax(offset_wls, amps)
-        specmin = argmaxmin.argrelmin(offset_wls, amps)
+        specmax = argmaxmin.argrelmax(offset_wls, roundedamps)
+        specmin = argmaxmin.argrelmin(offset_wls, roundedamps)
 
         # Remove cases of consecutive max,min,max which sometimes happens
 
