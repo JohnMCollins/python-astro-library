@@ -106,7 +106,7 @@ class Specprofile(object):
         
         self.wavelengths = wavelengths
         self.amplitudes = amps
-        
+
         # Work from either side of central wavelength it makes the numbers more manageable
         # Get min and max amplitude
         
