@@ -96,7 +96,7 @@ class Specprofile(object):
         self.ewinds = (leftew, rightew)
         return  True
         
-    def calcprofile(self, wavelengths, amps, central = 6563.0, decs = 5, sigthresh = 0.5, intthresh = 0.1):
+    def calcprofile(self, wavelengths, amps, central = 6563.0, decs = 6, sigthresh = 0.5, intthresh = 0.1):
         """Calculate the profile shape.
         
         Supply wavelengths and amplitudes
