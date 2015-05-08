@@ -10,6 +10,10 @@ import xml.etree.ElementTree as ET
 import xmlutil
 import datarange
 
+SPC_DOC_NAME = "SPCCTRL"
+SPC_DOC_ROOT = "spcctrl"
+CFILEELEM = "cfile"
+
 class SpecDataError(Exception):
     pass
 
@@ -711,3 +715,22 @@ class SpecDataList(object):
             d.save(doc, dnode, "array")
         self.dirty = False
 
+def Load_specctrl(fname):
+    """Load spectrum control file from given file"""
+    try:
+        doc, root = xmlutil.load_file(fname, SPC_DOC_ROOT)
+        newlist = SpecDataList(filename)
+        cnode = xmlutil.find_child(root, CFILEELEM)
+        newlist.load(cnode)
+    except xmlutil.XMLError as e:
+        raise SpecDataError("Load control file XML error: " + e.args[0])
+    return newlist
+    
+def Save_specctrl(fname, speclist):
+    """Save spectrum control file to file"""
+    try:
+        doc, root = xmlutil.init_save(SPC_DOC_NAME, SPC_DOC_ROOT)
+        speclist.save(doc, root, CFILEELEM)
+        xmlutil.complete_save(fname, doc)
+    except xmlutil.XMLError as e:
+        raise SpecDataError("Save control file XML error: " + e.args[0])
