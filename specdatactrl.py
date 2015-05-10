@@ -719,7 +719,7 @@ def Load_specctrl(fname):
     """Load spectrum control file from given file"""
     try:
         doc, root = xmlutil.load_file(fname, SPC_DOC_ROOT)
-        newlist = SpecDataList(filename)
+        newlist = SpecDataList(fname)
         cnode = xmlutil.find_child(root, CFILEELEM)
         newlist.load(cnode)
     except xmlutil.XMLError as e:
