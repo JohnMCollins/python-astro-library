@@ -68,7 +68,7 @@ def find_child(pnode, name):
     if child is not None: return child
     raise XMLError("Could not find element '" + name + "'")
 
-def load_file(filename, rootname):
+def load_file(filename, rootname = None):
     """Load XML DOM document from file"""
     try:
         doc = ET.parse(filename)
@@ -77,7 +77,7 @@ def load_file(filename, rootname):
     except ET.ParseError as e:
         raise XMLError("Parse error on " + filename + " - " + e.args[0])
     root = doc.getroot()
-    if root.tag != rootname:
+    if rootname is not None and root.tag != rootname:
         raise XMLError("Unexpected document type read '" + root.tag + "' expected '" + rootname + "'")
     return (doc, root)
 

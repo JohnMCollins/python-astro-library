@@ -189,7 +189,7 @@ class  RangeList(object):
 def load_ranges(filename):
     """Load a list of ranges from the given file"""
     try:
-        doc, root = xmlutil.load_file(filename, "ranges")
+        doc, root = xmlutil.load_file(filename)
         ret = RangeList()
         rl = xmlutil.find_child(root, "rangelist")
         ret.load(rl)

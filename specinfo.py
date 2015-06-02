@@ -16,6 +16,8 @@ SPI_DOC_ROOT = "specinfo"
 CFILEELEM = "cfile"
 RANGELIST = "rangelist"
 
+SUFFIX = 'spi'
+
 class  SpecInfoError(Exception):
     """Class to report errors concerning spec info files"""
     pass
@@ -29,18 +31,28 @@ class  SpecInfo(object):
         self.xmlroot = None
         self.cfile = None
         self.rlist = None
+    
+    def is_complete(self):
+        """Check we have file OK to reload from"""
+        return self.cfile is not None and self.rlist is not None
+    
+    def has_file(self):
+        return self.filename is not None
         
     def loadfile(self, filename):
         """Load up a filename"""       
         try:
             self.xmldoc, self.xmlroot = xmlutil.load_file(filename, SPI_DOC_ROOT)
             self.filename = filename
+            self.get_ctrlfile()
+            self.get_rangelist()
         except xmlutil.XMLError as e:
             raise SpecInfoError(e.args[0])
     
-    def get_ctrlfile(self):
+    def get_ctrlfile(self, refresh=False):
         """Obtain control file list from XML doc
-        Get a new one each time"""
+        Get a new one if refresh given"""
+        if not refresh and self.cfile is not None: return self.cfile
         if self.xmlroot is None:
             raise SpecInfoError("No file loaded yet")
         try:
@@ -52,14 +64,15 @@ class  SpecInfo(object):
             raise SpecInfoError("Load control file XML error: " + e.args[0])
         return self.cfile
     
-    def get_rangelist(self):
+    def get_rangelist(self, refresh=False):
         """Obtain range list from XML doc
-        Get a new one each time"""
+        Get a new one if refresh given"""
+        if not refresh and self.rlist is not None: return self.rlist
         if self.xmlroot is None:
             raise SpecInfoError("No file loaded yet")
         try:
             newrl = datarange.RangeList()
-            rlnode = xmlutil.find_child(root, RANGELIST)
+            rlnode = xmlutil.find_child(self.xmlroot, RANGELIST)
             newrl.load(rlnode)
             self.rlist = newrl
         except xmlutil.XMLError as e:
@@ -93,6 +106,7 @@ class  SpecInfo(object):
             self.rlist.save(self.xmldoc, self.xmlroot, RANGELIST)
             self.cfile.save(self.xmldoc, self.xmlroot, CFILEELEM)
             xmlutil.complete_save(outfile, self.xmldoc)
+            self.filename = outfile
         except xmlutil.XMLError as e:
             raise SpecInfoError("Save file XML error - " + e.args[0])
         except datarange.DataRangeError as e:

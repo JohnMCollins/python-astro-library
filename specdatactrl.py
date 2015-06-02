@@ -315,6 +315,10 @@ class SpecDataList(object):
         self.modbjdate = 0.0
         self.hvcorrect = 0.0
         
+    def is_complete(self):
+        """Report whether file is complete"""
+        return len(self.dirname) != 0 and len(self.obsfname) != 0 and len(self.datalist) != 0
+        
     def resetall(self):
         """Reset all parameters after changing things"""
         
