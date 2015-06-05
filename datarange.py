@@ -3,6 +3,7 @@
 import xml.etree.ElementTree as ET
 import xmlutil
 import copy
+import numpy as np
 
 class  DataRangeError(Exception):
     """Class to report errors concerning ranges"""
@@ -85,6 +86,14 @@ class  DataRange(object):
 
         sel = (xvalues < self.lower) | (xvalues > self.upper)
         return (xvalues[sel], yvalues[sel])
+    
+    def argselect(self, xvalues):
+        """Return the indices of the ends of the range delineated by the selection"""
+        
+        wh = np.where((xvalues >= self.lower) & (xvalues <= self.upper))[0]
+        if len(wh) == 0:
+            raise DataRangeError("No values in range")
+        return (wh[0], wh[-1])
 
     def load(self, node):
         """Load range from XML file"""
