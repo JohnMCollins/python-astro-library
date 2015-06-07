@@ -69,13 +69,17 @@ class  DataRange(object):
         """Return colour as an RGB constant"""
         return "#%.2x%.2x%.2x" % (self.red, self.green, self.blue)
 
-    def select(self, xvalues, yvalues):
+    def select(self, xvalues, yvalues, expandby=0.0):
         """Where xvalues and yvalues are numpy arrays of similar shape,
 
         select the xvalues from the range and the corresponding yvalues
-        and return the tuple (xvalues, yvalues)"""
+        and return the tuple (xvalues, yvalues)
+        
+        Expandby argument lets the range be expanded or contracted by a given proportion"""
 
-        sel = (xvalues >= self.lower) & (xvalues <= self.upper)
+        lwr = self.lower * (1.0 - expandby)
+        upr = self.upper * (1.0 + expandby)
+        sel = (xvalues >= lwr) & (xvalues <= upr)
         return (xvalues[sel], yvalues[sel])
 
     def selectnot(self, xvalues, yvalues):
