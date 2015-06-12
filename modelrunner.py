@@ -29,7 +29,7 @@ class ModelRunner(object):
             del self.envir[name]
         except KeyError:
             pass
-    
+
     def setdir(self, dir):
         """Set starting dir appropriately"""
         self.dir = os.path.expanduser(dir)

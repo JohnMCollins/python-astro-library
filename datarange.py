@@ -38,7 +38,7 @@ class  DataRange(object):
         if self.referable:
             msg = "Range - '" + self.shortname + "' is not valid"
         raise DataRangeError(msg)
-    
+
     def inrange(self, value):
         """Report if value is in given range"""
         return  value >= self.lower and value <= self.upper
@@ -74,7 +74,7 @@ class  DataRange(object):
 
         select the xvalues from the range and the corresponding yvalues
         and return the tuple (xvalues, yvalues)
-        
+
         Expandby argument lets the range be expanded or contracted by a given proportion"""
 
         lwr = self.lower * (1.0 - expandby)
@@ -90,10 +90,10 @@ class  DataRange(object):
 
         sel = (xvalues < self.lower) | (xvalues > self.upper)
         return (xvalues[sel], yvalues[sel])
-    
+
     def argselect(self, xvalues):
         """Return the indices of the ends of the range delineated by the selection"""
-        
+
         wh = np.where((xvalues >= self.lower) & (xvalues <= self.upper))[0]
         if len(wh) == 0:
             raise DataRangeError("No values in range")
@@ -167,7 +167,7 @@ class  RangeList(object):
             del self.rlist[item.shortname]
         except KeyError:
             raise DataRangeError("Range '" + item.shortname + "' did not exist")
-    
+
     def getrange(self, sn):
         """Get range for given short name"""
         try:
@@ -186,7 +186,7 @@ class  RangeList(object):
         return self.rlist.keys()
 
     def load(self, node):
-        """Load ranges from XML file"""       
+        """Load ranges from XML file"""
         for child in node:
             if child.tag == "rng":
                 newrg = DataRange()
@@ -221,7 +221,7 @@ def save_ranges(filename, ranges):
 
 def init_default_ranges():
     """Create default range set"""
-    
+
     ret = RangeList()
     ret.setrange(DataRange(lbound = 6560.31, ubound = 6566.28, descr = "X axis display range", shortname = "xrange", notused=True))
     ret.setrange(DataRange(lbound = 0.0, ubound = 3.0, descr = "Y axis display range", shortname = "yrange", notused=True))

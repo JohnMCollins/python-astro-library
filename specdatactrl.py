@@ -63,9 +63,9 @@ class SpecDataArray(object):
         # Y offset is now a vector of coefficients of the polynomial for continuum fit
         # It may be empty in which case we use the global one.
         # We don't try to combine the two
-        self.yscale = 1.0       
+        self.yscale = 1.0
         self.yoffset = None
-        
+
         # These are for storing stuff when we're doing individual continuum calculations
 
         self.tmpxvals = None
@@ -77,7 +77,7 @@ class SpecDataArray(object):
 
     def __hash__(self):
         return str.__hash__("%.6f" % self.modbjdate)
-    
+
     def tmpreset(self):
         """Fix temp space when iterating individual continua"""
         self.tmpcoeffs = None
@@ -88,7 +88,7 @@ class SpecDataArray(object):
         """Load up spectral data from file
 
         Pass directory name and mod date"""
-        
+
         # Ignore if done this already
         if self.xvalues is not None:
             return
@@ -124,7 +124,7 @@ class SpecDataArray(object):
         if not self.discount:
             return False
         return self.remarks
-        
+
     def get_xvalues(self, inclall = True):
         """Get X values after applying offset and scaling
 
@@ -139,7 +139,7 @@ class SpecDataArray(object):
         res = self.xvalues
         if res is None:
             raise SpecDataError("Data for " + self.filename + " is not loaded")
-        
+
         # Don't use += or similar below the first time or the whole array will be mangled
         # Apply scaling and offsets - change - now individual was cumulative.
 
@@ -164,7 +164,7 @@ class SpecDataArray(object):
             sk = self.is_skipped()
             if sk:
                 raise SpecDataError("Discounted data", self.filename, sk)
-     
+
         res = self.yvalues
         if res is None:
             raise SpecDataError("Data for " + self.filename + " is not loaded")
@@ -279,7 +279,7 @@ class SpecDataList(object):
 
     #def __init__(self, obsfname = "", cols = ('specfile', 'modjdate', 'modbjdate', 'hvcorrect'), spdcols = ('xvalues','yvalues')):
     def __init__(self, obsfname = "", cols = ('modbjdate',), spdcols = ('xvalues','yvalues')):
-        
+
         # If file name is given, initialise directory and observation files name
         # Do this because most of the time the obs file is in the same directory as
         # the spectra files.
@@ -303,7 +303,7 @@ class SpecDataList(object):
         # These are the names of columns in the obs file and the spectral data files
         self.cols = cols
         self.spdcols = spdcols
-        
+
         self.resetall()
 
         # Set this to remember that we've made changes and need to save them
@@ -314,14 +314,14 @@ class SpecDataList(object):
         self.modjdate = 0.0
         self.modbjdate = 0.0
         self.hvcorrect = 0.0
-        
+
     def is_complete(self):
         """Report whether file is complete"""
         return len(self.dirname) != 0 and len(self.obsfname) != 0 and len(self.datalist) != 0
-        
+
     def resetall(self):
         """Reset all parameters after changing things"""
-        
+
         # These are the offset and scale for X values.
         # We apply any individual scales and offsets separately
 
@@ -340,7 +340,7 @@ class SpecDataList(object):
         self.datalist = []
         self.maxminx = None
         self.maxminy = None
-        
+
     def set_dirname(self, dir):
         """Set the observation directory as given"""
         dir = os.path.abspath(dir)
@@ -350,7 +350,7 @@ class SpecDataList(object):
         self.dirname = dir
         self.guessobsfile()
         self.dirty = True
-        
+
     def set_filename(self, file):
         """Set the observation file as given.
         Possibly reset the directory"""
@@ -363,13 +363,13 @@ class SpecDataList(object):
         self.dirname = dir
         self.obsfname = basefile
         self.dirty = True
-        
+
     def classify_files(self):
         """Read file names in observations directory.
         Of the file names read return the prefix (we use first 5 chars)
         of the most common prefix file and the file name of any other file
         if there's only one"""
-        
+
         filelist = glob.glob(self.dirname + '/*')
         occs = dict()
         for f5 in [os.path.basename(ff)[0:5] for ff in filelist]:
@@ -386,13 +386,13 @@ class SpecDataList(object):
             oflist = glob.glob(self.dirname + '/' + fprefix + '*')
             return (dprefix, oflist[0])
         return (dprefix, "")
-                
+
     def guessobsfile(self):
         """Try to figure out the name of the observation file having got the
         directory"""
         dprefix, obsf = self.classify_files()
         self.obsfname = obsf
-        
+
     def getdatafilenames(self):
         """Get a sorted list of the data files"""
         dprefix, obsf = self.classify_files()
@@ -419,7 +419,7 @@ class SpecDataList(object):
     def parse_mbjdate(self, field):
         """Parse modified barycentric date"""
         self.modbjdate = parse_mjd(field)
-   
+
     def parse_hvcorrect(self, field):
         """Parse heliocentric vel correction"""
         self.hvcorrect = float(field)
@@ -435,7 +435,7 @@ class SpecDataList(object):
 
     # End of parsing routines
     #########################
-   
+
     def loadfile(self):
         """Load observation file and set up data list"""
 
@@ -451,7 +451,7 @@ class SpecDataList(object):
             raise SpecDataError("Unable to find any spectrum files")
 
         # No parse each file
-        
+
         self.datalist = []
         reparser = re.compile("\s+")
         for line in fin:
@@ -465,7 +465,7 @@ class SpecDataList(object):
             self.modjdate = 0.0
             self.modbjdate = 0.0
             self.hvcorrect = 0.0
-        
+
             for n, c in enumerate(self.cols):
                 try:
                     parserout = SpecDataList.routs[c]
@@ -474,7 +474,7 @@ class SpecDataList(object):
                     raise SpecDataError("Unknown column name " + c + " in SpecDataList")
                 except IndexError:
                     raise SpecDataError("Column number " + str(n) + " out of range in SpecDataList")
-                
+
             newarray = SpecDataArray(self.currentfile, self.spdcols, self.modjdate, self.modbjdate, self.hvcorrect)
             newarray.listlink = self
             self.datalist.append(newarray)
@@ -520,7 +520,7 @@ class SpecDataList(object):
         """Get just max and min for y as tuple"""
         self.loadmaxmin()
         return (self.maxminy.lower, self.maxminy.upper)
-    
+
     def count_indiv_x(self):
         """Count number of individual scales or offsets in X values"""
         return len(filter(lambda d: d.xscale != 1.0 or d.xoffset != 0.0, self.datalist))
@@ -532,7 +532,7 @@ class SpecDataList(object):
     def count_markers(self):
         """Count the number discounted"""
         return len([ d for d in self.datalist if d.discount ])
-    
+
     def reset_markers(self):
         """Reset any discount markers, return number reset"""
         ndone = 0
@@ -554,11 +554,11 @@ class SpecDataList(object):
                 ndone += 1
         self.dirty = self.dirty or ndone > 0
         return ndone
-    
+
     def tmpreset(self):
         """Clear temp markers"""
         for d in self.datalist: d.tmpreset()
-    
+
     def copy_coeffs(self):
         """Copy coefficients of continuum calculations across"""
         for d in self.datalist:
@@ -692,7 +692,7 @@ class SpecDataList(object):
                     sa = SpecDataArray("")
                     sa.load(dnode)
                     sa.listlink = self
-                    self.datalist.append(sa)                
+                    self.datalist.append(sa)
         for d in self.datalist:     # Do this last in case data loaded first
             d.cols = self.spdcols
 
@@ -729,7 +729,7 @@ def Load_specctrl(fname):
     except xmlutil.XMLError as e:
         raise SpecDataError("Load control file XML error: " + e.args[0])
     return newlist
-    
+
 def Save_specctrl(fname, speclist):
     """Save spectrum control file to file"""
     try:

@@ -12,7 +12,7 @@ class LUTError(Exception):
 
 class Lutdata(object):
     """Representation of LUT file for DoTS"""
-    
+
     def __init__(self):
         self.ntemps = 1
         self.nlimbs = 1
@@ -53,9 +53,9 @@ class Lutdata(object):
 
         if len(line2) != 6:
             raise LUTError("Expecting second line of file to have 6 fields but found " + str(len(line2)))
-        
+
         self.mint4, self.maxt4, self.minv, self.maxv, self.minla, self.maxla = line2
-        
+
         # Slurp up rest of data in one swell foop
 
         try:
@@ -68,7 +68,7 @@ class Lutdata(object):
         npoints = reduce(lambda x,y:x*y,dims)
         if  len(arr) != npoints + self.nlimbs:
             raise LUTError("Expecting " + str(npoints + self.nlimbs) + " but read " + str(len(arr)))
-        
+
         self.langles = arr[0:self.nlimbs]
         arr = arr[self.nlimbs:]
         arr = arr.reshape(dims)

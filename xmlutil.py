@@ -20,7 +20,7 @@ def getint(node):
 
 def getfloat(node):
     """Extract text field from XML node and make a float out of it"""
-    try:   
+    try:
         return float(node.text)
     except ValueError:
         raise XMLError("Invalid float value for " + node.tag)

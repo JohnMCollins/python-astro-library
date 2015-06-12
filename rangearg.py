@@ -35,7 +35,7 @@ def getrangearg(argparsevar, rangename="range", lowerarg="lower", upperarg="uppe
             ulim = argparsevar[upperarg]
     except KeyError:
         return  (0.0, 0.0)
-    
+
     if llim > ulim:
         return  (ulim, llim)
     return  (llim, ulim)
@@ -43,9 +43,9 @@ def getrangearg(argparsevar, rangename="range", lowerarg="lower", upperarg="uppe
 def parserange(arg):
     """Parse a range argument, either a single floating point number, in which case assume other end is zero,
     or a pair. If only a single number add zero. Return a sorted result"""
-    
+
     if arg is None: return None
-    
+
     bits = string.split(arg, ',')
     try:
         if len(bits) == 1:
@@ -57,6 +57,6 @@ def parserange(arg):
     except:
         print "Did not understand range value of", arg
         return None
-    
+
     ret.sort()
     return ret

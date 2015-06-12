@@ -85,7 +85,7 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
 
     def updateplot(self):
         """Revise plot when anything changes"""
-        
+
         # Clear any existing plot
 
         if  self.already:
@@ -125,7 +125,7 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
         ymin *= .95
         ymax *= 1.05
         plt.ylim(ymin, ymax)
-        
+
         if len(legends) > 5:
             legends = legends[0:5]
             legends.append("etc...")
@@ -140,11 +140,11 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
 
         if self.xtit is not None: plt.xlabel(self.xtit)
         if self.ytit is not None: plt.ylabel(self.ytit)
-        plt.legend(legends, loc='upper left') 
+        plt.legend(legends, loc='upper left')
 
         plt.show()
         self.already = True
-    
+
     def getxamounts(self):
         """Get adjustments for X range"""
         amt = float(self.adjby.currentText())
@@ -157,7 +157,7 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
             ramt = 0.0
         elif self.zright.isChecked():
             lamt = 0.0
-        return (lamt, ramt)      
+        return (lamt, ramt)
 
     def on_xrangemin_valueChanged(self, value):
         if isinstance(value, QString): return
@@ -170,7 +170,7 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
     def on_selectx_stateChanged(self, b = None):
         if b is None: return
         self.updateplot()
-    
+
     def on_adjustx_clicked(self, b = None):
         if b is None: return
         amt = float(self.adjby.currentText())
@@ -184,7 +184,7 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
         elif self.zright.isChecked():
             lamt = 0.0
         rangeadj(self.xrangemin, self.xrangemax, lamt, ramt)
-    
+
     def on_adjrange_clicked(self, b = None):
         if b is None: return
         amt = float(self.radjby.currentText())
@@ -216,7 +216,7 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
     def on_datafiles_itemSelectionChanged(self):
         if self.hangon: return
         self.updateplot()
- 
+
     def on_selectall_clicked(self, b = None):
         if b is None: return
         self.hangon = True

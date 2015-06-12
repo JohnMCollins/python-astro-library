@@ -65,17 +65,17 @@ class Specplot(object):
         if self.xtickstep is not None:
             arr = getticks(self.wavelengths, self.xtickstep)
             plt.xticks(arr, arr)
- 
+
         if self.ytickstep is not None:
             arr = getticks(self.intensities, self.ytickstep)
             plt.yticks(arr, arr)
-        
+
         if self.xpad is not None:
             plt.xlim(getoffsets(self.wavelengths, self.xpad))
 
         if self.ypad is not None:
             plt.ylim(getoffsets(self.intensities, self.ypad))
-       
+
         plt.plot(self.wavelengths, self.intensities)
         plt.show()
 

@@ -114,7 +114,7 @@ class Specarray(object):
                         dat.load(listc)
                         self.datalist.append(dat)
                     listc = listc.nextSibling()
-            child = child.nextSibling()   
+            child = child.nextSibling()
 
     def save(self, doc, pnode, name):
         """Save to XML file"""

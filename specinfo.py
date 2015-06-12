@@ -1,5 +1,5 @@
 # Put everything for one spectrum set in a single XML file
-# JMC 18/5/15 
+# JMC 18/5/15
 
 import os.path
 import string
@@ -24,23 +24,23 @@ class  SpecInfoError(Exception):
 
 class  SpecInfo(object):
     """Details of spectum data including ranges"""
-    
+
     def __init__(self):
         self.filename = None
         self.xmldoc = None
         self.xmlroot = None
         self.cfile = None
         self.rlist = None
-    
+
     def is_complete(self):
         """Check we have file OK to reload from"""
         return self.cfile is not None and self.rlist is not None
-    
+
     def has_file(self):
         return self.filename is not None
-        
+
     def loadfile(self, filename):
-        """Load up a filename"""       
+        """Load up a filename"""
         try:
             self.xmldoc, self.xmlroot = xmlutil.load_file(filename, SPI_DOC_ROOT)
             self.filename = filename
@@ -48,7 +48,7 @@ class  SpecInfo(object):
             self.get_rangelist()
         except xmlutil.XMLError as e:
             raise SpecInfoError(e.args[0])
-    
+
     def get_ctrlfile(self, refresh=False):
         """Obtain control file list from XML doc
         Get a new one if refresh given"""
@@ -63,7 +63,7 @@ class  SpecInfo(object):
         except xmlutil.XMLError as e:
             raise SpecInfoError("Load control file XML error: " + e.args[0])
         return self.cfile
-    
+
     def get_rangelist(self, refresh=False):
         """Obtain range list from XML doc
         Get a new one if refresh given"""
@@ -78,19 +78,19 @@ class  SpecInfo(object):
         except xmlutil.XMLError as e:
             raise SpecInfoError("Saved range error - " + e.args[0])
         return self.rlist
-    
+
     def set_ctrlfile(self, cfile):
         """Set control file list ready to save"""
         if not isinstance(cfile, specdatactrl.SpecDataList):
             raise SpecInfoError("Set_ctrl file invalid argument")
         self.cfile = cfile
-    
+
     def set_rangelist(self, rlist):
         """Set range list ready to save"""
         if not isinstance(rlist, datarange.RangeList):
             raise SpecInfoError("Set_range list invalid argument")
-        self.rlist = rlist    
-    
+        self.rlist = rlist
+
     def savefile(self, filename = None):
         """Save stuff to file"""
         outfile = self.filename

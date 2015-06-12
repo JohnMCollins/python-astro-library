@@ -29,7 +29,7 @@ def linear_interp(frompts, topts, forx):
     """Linearly interpolate between arg point arguments for supplied X value
 
     Return made-up arg point"""
-    
+
     x0,y0 = frompts.getxy()
     x1,y1 = topts.getxy()
     resy = y0 + (forx - x0) * (y1 - y0) / (x1 - x0)
@@ -46,7 +46,7 @@ def insert_interp_value(data_array, forx):
     In either case return the place where it went in or was found"""
 
     place, wasfound = binary_search(data_array, forx)
-    
+
     # If was found, nothing to do
 
     if wasfound: return place

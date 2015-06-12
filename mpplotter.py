@@ -69,7 +69,7 @@ class Plotter(object):
         if self.xrange.notused:
             col = self.xrange.rgbcolour()
             plt.axvline(x=self.xrange.lower, color=col, ls="--")
-            plt.axvline(x=self.xrange.upper, color=col, ls="--")    
+            plt.axvline(x=self.xrange.upper, color=col, ls="--")
         else:
             plt.xlim(self.xrange.lower, self.xrange.upper)
         if self.yrange.notused:
@@ -104,7 +104,7 @@ class Plotter(object):
 
     def close(self):
         plt.close()
-        
+
     def savefig(self, pltfile):
         """Save current figure to file name given"""
         plt.gcf().savefig(pltfile)

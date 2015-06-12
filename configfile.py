@@ -23,7 +23,7 @@ def check_homed_configdir():
             os.mkdir(name)
         except OSError:
             raise ConfigError("Cannot create config file directory " + name)
-    return  name   
+    return  name
 
 def get_full_config_path(fname):
     """Get full path for config file"""
@@ -54,15 +54,15 @@ def get_filename(fname = None):
 
 def load(fname = None, rootname = None):
     """Load config file, checking that the root document is correct.
-    
+
     If either are null, get the file name and root doc name from program name"""
-    
+
     fname = get_filename(fname)
-    
+
     # No error if not there
-    
+
     if not os.path.isfile(fname): return None
-    
+
     try:
         return  xmlutil.load_file(fname, get_rootname(rootname))
     except xmlutil.XMLError as e:
@@ -75,7 +75,7 @@ def init_save(rootname = None):
 
 def complete_save(doc, fname = None):
     """Complete save operation
-    
+
     NB args other way round from XMLUTIL"""
     try:
         xmlutil.complete_save(get_filename(fname), doc)

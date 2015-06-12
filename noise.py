@@ -5,7 +5,7 @@ import numpy.random as nr
 
 def rms(s):
     """Get root mean square of values"""
-    
+
     return np.sqrt(np.mean(np.square(s)))
 
 def noise(sig, snr, unorm = 0.0):
