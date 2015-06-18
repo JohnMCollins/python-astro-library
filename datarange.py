@@ -3,6 +3,7 @@
 import xml.etree.ElementTree as ET
 import xmlutil
 import copy
+import string
 import numpy as np
 
 class  DataRangeError(Exception):
@@ -69,7 +70,7 @@ class  DataRange(object):
         """Return colour as an RGB constant"""
         return "#%.2x%.2x%.2x" % (self.red, self.green, self.blue)
 
-    def select(self, xvalues, yvalues, expandby=0.0):
+    def select(self, xvalues, *yvalues):
         """Where xvalues and yvalues are numpy arrays of similar shape,
 
         select the xvalues from the range and the corresponding yvalues
@@ -77,19 +78,23 @@ class  DataRange(object):
 
         Expandby argument lets the range be expanded or contracted by a given proportion"""
 
-        lwr = self.lower * (1.0 - expandby)
-        upr = self.upper * (1.0 + expandby)
-        sel = (xvalues >= lwr) & (xvalues <= upr)
-        return (xvalues[sel], yvalues[sel])
+        sel = (xvalues >= self.lower) & (xvalues <= self.upper)
+        selres = [ xvalues[sel] ]
+        for yv in yvalues:
+            selres.append(yv[sel])
+        return selres
 
-    def selectnot(self, xvalues, yvalues):
+    def selectnot(self, xvalues, *yvalues):
         """Where xvalues and yvalues are numpy arrays of similar shape,
 
         select the xvalues not from the range and the corresponding yvalues
         and return the tuple"""
 
         sel = (xvalues < self.lower) | (xvalues > self.upper)
-        return (xvalues[sel], yvalues[sel])
+        selres = [ xvalues[sel]]
+        for yv in yvalues:
+            selres.append(yv[sel])
+        return selres
 
     def argselect(self, xvalues):
         """Return the indices of the ends of the range delineated by the selection"""
@@ -144,7 +149,7 @@ def MergeRange(a, b):
     res.upper = max(a.upper,b.upper)
     return res
 
-class  RangeList(object):
+class RangeList(object):
     """Class for remembering a list of ranges"""
 
     def __init__(self):
@@ -219,15 +224,55 @@ def save_ranges(filename, ranges):
     except xmlutil.XMLError as e:
         raise DataRangeError("Saved range error - " + e.args[0])
 
-def init_default_ranges():
+def init_default_ranges(peakshort = 'halpha', peakdescr = 'H Alpha peak', peakwl = 6562.8, peakwid = 2.0, xwid = 20.0):
     """Create default range set"""
 
     ret = RangeList()
-    ret.setrange(DataRange(lbound = 6560.31, ubound = 6566.28, descr = "X axis display range", shortname = "xrange", notused=True))
+    ret.setrange(DataRange(lbound = peakwl - xwid/2.0, ubound = peakwl + xwid/2.0, descr = "X axis display range", shortname = "xrange", notused=True))
     ret.setrange(DataRange(lbound = 0.0, ubound = 3.0, descr = "Y axis display range", shortname = "yrange", notused=True))
-    ret.setrange(DataRange(lbound = 6560.3, ubound = 6561.6, descr = "Continuum blue", shortname = "contblue", blue=128))
-    ret.setrange(DataRange(lbound = 6565.4, ubound = 6620.5, descr = "Continuum red", shortname = "contred", red=128))
-    ret.setrange(DataRange(lbound = 6561.8, ubound = 6563.8, descr = "H Alpha peak", shortname = "halpha", red=255))
+    #ret.setrange(DataRange(lbound = 6560.3, ubound = 6561.6, descr = "Continuum blue", shortname = "contblue", blue=128))
+    #ret.setrange(DataRange(lbound = 6565.4, ubound = 6620.5, descr = "Continuum red", shortname = "contred", red=128))
+    ret.setrange(DataRange(lbound = peakwl - peakwid/2.0, ubound = peakwl + peakwid/2.0, descr = peakdescr, shortname = peakshort, red=255))
     #ret.setrange(DataRange(lbound = 6561.46, ubound = 6561.7, descr = "Integration section 1", shortname = "integ1", green=200, blue=200))
     #ret.setrange(DataRange(lbound = 6562.06, ubound = 6562.3, descr = "Integration section 2", shortname = "integ2", red=200, green=200))
     return ret
+
+class Rangeset(object):
+    """Set of reanges for when we want to extract points inside all of several or none of several"""
+    
+    def __init__(self, lst):
+        self.rangeset = dict()
+        self.rangelist = lst
+    
+    def parseset(self, arg):
+        """Parse list of range names and add to set"""
+        
+        if arg is None or len(arg) == 0:
+            return
+        argparts = string.split(arg, ',')
+        d = copy.copy(self.rangeset)
+        for a in argparts:
+            r = self.rangelist.getrange(a)
+            d[a] = r
+        self.rangeset = d
+    
+    def exclude(self, xvalues, *yvalues):
+        """Exclude from pairs of xvalues and yvalues the xvalues in any of the ranges given"""
+        
+        for r in self.rangeset.values():
+            yvalues = r.selectnot(xvalues, *yvalues)
+            xvalues = yvalues.pop(0)
+        selres = [ xvalues ]
+        for yv in yvalues: selres.append(yv)
+        return tuple(selres)
+    
+    def include(self, xvalues, *yvalues):
+        """Include everything that's in any of the ranges"""
+        
+        rs = np.zeros_like(xvalues, dtype=np.bool)
+        for r in self.rangeset.values():
+            rs |= (xvalues >= r.lower) & (xvalues <= r.upper)
+        selres = [ xvalues[rs] ]
+        for yv in yvalues:
+            selres.append(yv[rs])
+        return tuple(selres)

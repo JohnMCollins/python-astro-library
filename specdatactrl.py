@@ -474,6 +474,8 @@ class SpecDataList(object):
                     raise SpecDataError("Unknown column name " + c + " in SpecDataList")
                 except IndexError:
                     raise SpecDataError("Column number " + str(n) + " out of range in SpecDataList")
+                except ValueError as e:
+                    raise SpecDataError("Conversion error in SpecDataList - " + e.args[0])
 
             newarray = SpecDataArray(self.currentfile, self.spdcols, self.modjdate, self.modbjdate, self.hvcorrect)
             newarray.listlink = self
