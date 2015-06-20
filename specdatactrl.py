@@ -7,12 +7,15 @@ import string
 import re
 import xml.etree.ElementTree as ET
 
+import jdate
 import xmlutil
 import datarange
 
 SPC_DOC_NAME = "SPCCTRL"
 SPC_DOC_ROOT = "spcctrl"
 CFILEELEM = "cfile"
+
+Filetimematch = re.compile('(\d\d\d\d)\D(\d\d)\D(\d\d)\D(\d\d)\D(\d\d)\D(\d\d)(?:\.(\d+))?')
 
 class SpecDataError(Exception):
     pass
