@@ -6,6 +6,7 @@ import glob
 import string
 import re
 import xml.etree.ElementTree as ET
+import datetime
 
 import jdate
 import xmlutil
@@ -15,14 +16,28 @@ SPC_DOC_NAME = "SPCCTRL"
 SPC_DOC_ROOT = "spcctrl"
 CFILEELEM = "cfile"
 
-Filetimematch = re.compile('(\d\d\d\d)\D(\d\d)\D(\d\d)\D(\d\d)\D(\d\d)\D(\d\d)(?:\.(\d+))?')
+# This is the reference wavelength for working out the slope adjustment
+
+Default_ref_wavelength = 6562.8
+Filetimematch = re.compile('(\d\d\d\d)\D(\d\d)\D(\d\d)\D(\d\d)\D(\d\d)\D(\d\d)(\.\d+)?')
+
+def jd_parse_from_filename(fn):
+    """Parse filename to get jdate if possible"""
+    
+    mtch = Filetimematch.search(fn)
+    if mtch is None:
+        return None
+        sys.stdout = sys.stderr
+    mtchl = list(mtch.groups())
+    ms = mtchl.pop()
+    mtchl = [ int(m) for m in mtchl ]
+    if ms is None: ms = 0
+    else: ms = int(round(float(ms), 6) * 1e6)
+    mtchl.append(ms)
+    return  jdate.datetime_to_jdate(datetime.datetime(*mtchl))
 
 class SpecDataError(Exception):
     pass
-
-# This is the reference wavelength for working out the slope adjustment
-
-Default_ref_wavelength = 6561.0
 
 class SpecDataArray(object):
     """This class holds a set of spectral data
@@ -479,6 +494,15 @@ class SpecDataList(object):
                     raise SpecDataError("Column number " + str(n) + " out of range in SpecDataList")
                 except ValueError as e:
                     raise SpecDataError("Conversion error in SpecDataList - " + e.args[0])
+            
+            # If we haven't got modjdate set, try to set it from the file name which HAPRS files include it in
+            
+            if self.modjdate == 0.0:
+                jd = jd_parse_from_filename(self.currentfile)
+                if jd is None:
+                    self.modjdate = self.modbjdate
+                else:
+                    self.modjdate = jd
 
             newarray = SpecDataArray(self.currentfile, self.spdcols, self.modjdate, self.modbjdate, self.hvcorrect)
             newarray.listlink = self
