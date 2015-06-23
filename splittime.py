@@ -10,7 +10,7 @@ def splittime(separation, timearray, *valuearrays):
     """This routine is for splitting a set of arrays all of the same size into an array of arrays
        designating different periods split where the time differences exceed a given time in seconds.
        The argument timearray is assumed to be a datefime object.
-       The final argument gives the other arrays (nb vaiadic)"""
+       The final argument gives the other arrays (nb variadic)"""
 
     diffs = np.diff(timearray)
     places = np.where(discrim(diffs) >= separation)[0] + 1
