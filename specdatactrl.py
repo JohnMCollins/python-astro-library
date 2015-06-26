@@ -23,7 +23,7 @@ Filetimematch = re.compile('(\d\d\d\d)\D(\d\d)\D(\d\d)\D(\d\d)\D(\d\d)\D(\d\d)(\
 
 def jd_parse_from_filename(fn):
     """Parse filename to get jdate if possible"""
-    
+
     mtch = Filetimematch.search(fn)
     if mtch is None:
         return None
@@ -494,9 +494,9 @@ class SpecDataList(object):
                     raise SpecDataError("Column number " + str(n) + " out of range in SpecDataList")
                 except ValueError as e:
                     raise SpecDataError("Conversion error in SpecDataList - " + e.args[0])
-            
+
             # If we haven't got modjdate set, try to set it from the file name which HAPRS files include it in
-            
+
             if self.modjdate == 0.0:
                 jd = jd_parse_from_filename(self.currentfile)
                 if jd is None:
