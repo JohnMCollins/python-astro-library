@@ -239,14 +239,14 @@ def init_default_ranges(peakshort = 'halpha', peakdescr = 'H Alpha peak', peakwl
 
 class Rangeset(object):
     """Set of reanges for when we want to extract points inside all of several or none of several"""
-    
+
     def __init__(self, lst):
         self.rangeset = dict()
         self.rangelist = lst
-    
+
     def parseset(self, arg):
         """Parse list of range names and add to set"""
-        
+
         if arg is None or len(arg) == 0:
             return
         argparts = string.split(arg, ',')
@@ -255,20 +255,20 @@ class Rangeset(object):
             r = self.rangelist.getrange(a)
             d[a] = r
         self.rangeset = d
-    
+
     def exclude(self, xvalues, *yvalues):
         """Exclude from pairs of xvalues and yvalues the xvalues in any of the ranges given"""
-        
+
         for r in self.rangeset.values():
             yvalues = r.selectnot(xvalues, *yvalues)
             xvalues = yvalues.pop(0)
         selres = [ xvalues ]
         for yv in yvalues: selres.append(yv)
         return tuple(selres)
-    
+
     def include(self, xvalues, *yvalues):
         """Include everything that's in any of the ranges"""
-        
+
         rs = np.zeros_like(xvalues, dtype=np.bool)
         for r in self.rangeset.values():
             rs |= (xvalues >= r.lower) & (xvalues <= r.upper)
