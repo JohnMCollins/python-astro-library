@@ -647,7 +647,7 @@ class SpecDataList(object):
 
     def set_xoffset(self, newoff):
         """Set x offset and adjust min/max if needed"""
-        change = newoff - self.offset
+        change = newoff - self.xoffset
         if change == 0.0: return
         if self.maxminx is not None:
             self.maxminx = datarange.DataRange(self.maxminx.lower + change, self.maxminx.upper + change)
