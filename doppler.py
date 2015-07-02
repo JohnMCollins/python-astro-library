@@ -1,6 +1,7 @@
 # Doppler shift operations
 
 import xyvalue
+import numpy as np
 
 def doppler(lamobs, vel):
     """Calculate real wavelength from observed wavelength with given velocity"""
@@ -9,6 +10,9 @@ def doppler(lamobs, vel):
 def rev_doppler(lamreal, vel):
     """Calculate observable wl from real wl with given velocity"""
     return lamreal / (1.0 - vel/299792.458)
+
+vec_doppler = np.vectorize(doppler)
+vec_rev_doppler = np.vectorize(rev_doppler)
 
 def apply_doppler_array(specarray, vel):
     """Apply doppler shift to the first column of a Python array"""

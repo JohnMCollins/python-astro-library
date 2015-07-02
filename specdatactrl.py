@@ -11,6 +11,7 @@ import datetime
 import jdate
 import xmlutil
 import datarange
+import doppler
 
 SPC_DOC_NAME = "SPCCTRL"
 SPC_DOC_ROOT = "spcctrl"
@@ -72,10 +73,6 @@ class SpecDataArray(object):
         self.modjdate = mjdate
         self.modbjdate = mbjdate
         self.hvcorrect = hvc
-
-        # Individual adjustments to X values (after applying global ones)
-        self.xoffset = 0.0
-        self.xscale = 1.0
 
         # Y scale is just a number possibly applied, default 1.0
         # Y offset is now a vector of coefficients of the polynomial for continuum fit
@@ -162,12 +159,11 @@ class SpecDataArray(object):
         # Apply scaling and offsets - change - now individual was cumulative.
 
         try:
-            if self.xscale != 1.0 or self.xoffset != 0.0:
-                res = res * self.xscale
-                res += self.xoffset
-            else:
-                res = res * self.listlink.xscale
-                res += self.listlink.xoffset
+            netcorrect = self.listlink.rvcorrect + self.hvcorrect
+
+            if netcorrect != 0.0:
+                res = doppler.vec_doppler(res, netcorrect)
+
         except AttributeError, TypeError:
             raise SpecDataError("Link error missing in " + self.filename)
         return res
@@ -229,8 +225,6 @@ class SpecDataArray(object):
         self.modjdate = 0.0
         self.modbjdate = 0.0
         self.hvcorrect = 0.0
-        self.xoffset = 0.0
-        self.xscale = 1.0
         self.yscale = 1.0
         self.yoffset = None
 
@@ -245,10 +239,6 @@ class SpecDataArray(object):
                 self.modjdate = xmlutil.getfloat(child)
             elif tagn == "modbjdate":
                 self.modbjdate = xmlutil.getfloat(child)
-            elif tagn == "xoffset":
-                self.xoffset = xmlutil.getfloat(child)
-            elif tagn == "xscale":
-                self.xscale = xmlutil.getfloat(child)
             elif tagn == "yoffset":
                 self.yoffset = xmlutil.getfloatlist(child)
             elif tagn == "yscale":
@@ -267,10 +257,6 @@ class SpecDataArray(object):
             xmlutil.savedata(doc, node, "modjdate", self.modjdate)
         if self.modbjdate != 0.0:
             xmlutil.savedata(doc, node, "modbjdate", self.modbjdate)
-        if self.xoffset != 0.0:
-            xmlutil.savedata(doc, node, "xoffset", self.xoffset)
-        if self.xscale != 1.0:
-            xmlutil.savedata(doc, node, "xscale", self.xscale)
         if self.yoffset is not None:
             xmlutil.savefloatlist(doc, node, "yoffset", self.yoffset)
         if self.yscale != 1.0:
@@ -343,9 +329,8 @@ class SpecDataList(object):
         # These are the offset and scale for X values.
         # We apply any individual scales and offsets separately
 
-        self.xoffset = 0.0
-        self.xscale = 1.0
-
+        self.rvcorrect = 0.0 
+        
         # Y scale is such as to make the continuum mean (or possibly median) 1.0
         # Y offset is a vector of coefficients of the fitting polynomial for the continuum
 
@@ -552,7 +537,7 @@ class SpecDataList(object):
 
     def count_indiv_x(self):
         """Count number of individual scales or offsets in X values"""
-        return len(filter(lambda d: d.xscale != 1.0 or d.xoffset != 0.0, self.datalist))
+        return len(filter(lambda d: d.hvcorrect != 0.0, self.datalist))
 
     def count_indiv_y(self):
         """Count number of individual scales or offsets in Y values"""
@@ -596,21 +581,19 @@ class SpecDataList(object):
         self.dirty = True
 
     def reset_indiv_x(self):
-        """Reset any individual scales and offsets. Return whether we did anything"""
+        """Reset any individual hv corrections. Return whether we did anything"""
         if self.count_indiv_x() == 0:
             return False
         for d in self.datalist:
-            d.xscale = 1.0
-            d.xoffset = 0.0
+            d.hvcorrect = 0.0
         self.dirty = True
         return True
 
     def reset_x(self):
-        """Reset the X scale and offset. Return whether we did anything"""
-        if self.xscale == 1.0 and self.xoffset == 0.0:
+        """Reset the X rv correction. Return whether we did anything"""
+        if self.rvcorrect == 0.0:
             return False
-        self.xscale = 1.0
-        self.xoffset = 0.0
+        self.rvcorrect = 0.0
         self.maxminx = None
         self.dirty = True
         return True
@@ -634,24 +617,13 @@ class SpecDataList(object):
         self.maxminy = None
         self.dirty = True
         return True
-
-    def set_xscale(self, newsc):
-        """Set x scale and adjust min/max if needed"""
-        change = newsc / self.xscale
-        if change == 1.0: return
-        self.xoffset *= change
-        if self.maxminx is not None:
-            self.maxminx = datarange.DataRange(self.maxminx.lower * change, self.maxminx.upper * change)
-        self.xscale = newsc
-        self.dirty = True
-
-    def set_xoffset(self, newoff):
-        """Set x offset and adjust min/max if needed"""
-        change = newoff - self.xoffset
-        if change == 0.0: return
-        if self.maxminx is not None:
-            self.maxminx = datarange.DataRange(self.maxminx.lower + change, self.maxminx.upper + change)
-        self.xoffset = newoff
+    
+    def set_rvcorrect(self, newrv):
+        """Set new rv correction"""
+        if self.rvcorrect == newrv:
+            return
+        self.rvcorrect = newrv
+        self.minmax = None
         self.dirty = True
 
     def set_yscale(self, newsc):
@@ -681,10 +653,9 @@ class SpecDataList(object):
         self.dirname = self.obsfname = ""
         self.cols = []
         self.spdcols = []
-        self.xoffset = 0.0
         self.yoffset = None
-        self.xscale = 1.0
         self.yscale = 1.0
+        self.rvcorrect = 0.0
         self.refwavelength = Default_ref_wavelength
         self.datalist = []
         self.maxminx = None
@@ -700,10 +671,8 @@ class SpecDataList(object):
                 for ochild in child: self.cols.append(xmlutil.gettext(ochild))
             elif tagn == "spcols":
                 for schild in child: self.spdcols.append(xmlutil.gettext(schild))
-            elif tagn == "xoffset":
-                self.xoffset = xmlutil.getfloat(child)
-            elif tagn == "xscale":
-                self.xscale = xmlutil.getfloat(child)
+            elif tagn == "rvcorrect":
+                self.rvcorrect = xmlutil.getfloat(child)
             elif tagn == "yoffset":
                 self.yoffset = xmlutil.getfloatlist(child)
             elif tagn == "yscale":
@@ -736,8 +705,7 @@ class SpecDataList(object):
         for c in self.cols: xmlutil.savedata(doc, colsnode, "oc", c)
         colsnode = ET.SubElement(node, "spcols")
         for c in self.spdcols: xmlutil.savedata(doc, colsnode, "sc", c)
-        if self.xoffset != 0.0: xmlutil.savedata(doc, node, "xoffset", self.xoffset)
-        if self.xscale != 1.0: xmlutil.savedata(doc, node, "xscale", self.xscale)
+        if self.rvcorrect != 0.0: xmlutil.savedata(doc, node, "rvcorrect", self.rvcorrect)
         if self.yoffset is not None: xmlutil.savefloatlist(doc, node, "yoffset", self.yoffset)
         if self.yscale != 1.0: xmlutil.savedata(doc, node, "yscale", self.yscale)
         xmlutil.savedata(doc, node, "refwavel", self.refwavelength)
