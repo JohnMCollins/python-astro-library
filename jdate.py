@@ -66,4 +66,4 @@ def display(jd):
     """Convert a Julian date to a date/time string"""
     if jd < 10000: return "%.4f" % jd
     when = jdate_to_datetime(jd)
-    return "%.2d/%.2d/%.2d %.2d:%.2d" % (when.day, when.month, when.year % 100, when.hour, when.minute)
+    return when.strftime("%d/%m/%y %H:%M:%S")

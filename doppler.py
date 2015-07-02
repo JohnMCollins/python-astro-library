@@ -21,4 +21,3 @@ def apply_doppler_array(specarray, vel):
 def apply_doppler_xy(specarray, vel):
   """Apply doppler shift to the first column of an array of spectral data and return the result"""
   return [xyvalue.XYvalue(doppler(a.xvalue, vel), a.yvalue) for a in specarray]
-

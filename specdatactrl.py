@@ -326,8 +326,7 @@ class SpecDataList(object):
     def resetall(self):
         """Reset all parameters after changing things"""
 
-        # These are the offset and scale for X values.
-        # We apply any individual scales and offsets separately
+        # Radial velocity correction
 
         self.rvcorrect = 0.0 
         
