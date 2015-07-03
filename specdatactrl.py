@@ -17,6 +17,23 @@ SPC_DOC_NAME = "SPCCTRL"
 SPC_DOC_ROOT = "spcctrl"
 CFILEELEM = "cfile"
 
+# Possible columns in observation times file
+
+Obsfields = (('specfile', 'Spectrum filename'),
+             ('jdate', 'Julian Date'),
+             ('modjdate', 'Modified Julian Date'),
+             ('bjdate', 'Barycentric Julian Date'),
+             ('modbjdate', 'Modified Barycentric Date'),
+             ('hvcorrect', 'Heliocentric Velocity Correction'),
+             ('yerror', 'Y error for all of dataset'))
+
+# Possible columns in spectral data file
+
+Specfields = (('xvalues', 'X (wavelength) values'),
+              ('yvalues', 'Y (intensity) values'),
+              ('yerr', 'Y errors individual point'),
+              ('ignored', 'Ignored column'))
+
 # This is the reference wavelength for working out the slope adjustment
 
 Default_ref_wavelength = 6562.8
@@ -163,7 +180,7 @@ class SpecDataArray(object):
         # Apply scaling and offsets - change - now individual was cumulative.
 
         try:
-            netcorrect = self.listlink.rvcorrect + self.hvcorrect
+            netcorrect = self.listlink.rvcorrect + self.hvcorrect / 1000.0
 
             if netcorrect != 0.0:
                 res = doppler.vec_doppler(res, netcorrect)
@@ -193,7 +210,7 @@ class SpecDataArray(object):
         try:
             scale = self.listlink.yscale
             moffs = self.listlink.yoffset
-        except AttributeError, TypeError:
+        except (AttributeError, TypeError):
             raise SpecDataError("Link error missing in " + self.filename)
 
         scale *= self.yscale
@@ -207,6 +224,25 @@ class SpecDataArray(object):
         if scale != 1.0:
             res = res * scale
         return res
+    
+    def get_yerrors(self, inclall = True):
+        """Get Y errors, either from "global" one from the entire spectrum, or from individual lines
+ 
+        Argument gives whether we argue about skipped values (default no)
+        File is assumed to be loaded."""
+        
+        if not inclall:
+            sk = self.is_skipped()
+            if sk:
+                raise SpecDataError("Discounted data", self.filename, sk)
+        if self.yerr is None:
+            if self.yvalues is None:
+                raise SpecDataError("Data for " + self.filename + " is not loaded")
+            try:
+                return np.zeros_like(self.yvalues) + self.listlink.yerror
+            except (AttributeError, TypeError):
+                raise SpecDataError("Link error missing in " + self.filename)
+        return self.yerr
 
     def getmaxminx(self, inclall = True):
         """Return tuple of mininmum and maximum x"""
