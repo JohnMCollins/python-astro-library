@@ -66,7 +66,11 @@ class SpecDataArray(object):
         # Numpy arrays of xvalues, yvalues and y errors
         self.xvalues = None
         self.yvalues = None
+        # yerr is a possible array of values
+        # yerror is a single value for everything
+        # with both yerr takes precedence
         self.yerr = None
+        self.yerror = None
 
         # Mod Jdate and Mod Barycentric Jdate
         # It is a mistake not to have the latter set
@@ -222,6 +226,7 @@ class SpecDataArray(object):
         self.xvalues = None
         self.yvalues = None
         self.yerr = None
+        self.yerror = None
         self.modjdate = 0.0
         self.modbjdate = 0.0
         self.hvcorrect = 0.0
@@ -245,6 +250,8 @@ class SpecDataArray(object):
                 self.yscale = xmlutil.getfloat(child)
             elif tagn == "hvcorrect":
                 self.hvcorrect = xmlutil.getfloat(child)
+            elif tagn == "yerror":
+                self.yerror = xmlutil.getfloat(child)
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
@@ -263,6 +270,8 @@ class SpecDataArray(object):
             xmlutil.savedata(doc, node, "yscale", self.yscale)
         if self.hvcorrect != 0.0:
             xmlutil.savedata(doc, node, "hvcorrect", self.hvcorrect)
+        if self.yerror is not None:
+            xmlutil.savedata(doc, node, "yerror", self.yerror)
 
 def parse_jd(field):
     """Parse Julian date, checking it looks right"""
@@ -318,6 +327,7 @@ class SpecDataList(object):
         self.modjdate = 0.0
         self.modbjdate = 0.0
         self.hvcorrect = 0.0
+        self.yerror = None
 
     def is_complete(self):
         """Report whether file is complete"""
@@ -425,6 +435,9 @@ class SpecDataList(object):
     def parse_hvcorrect(self, field):
         """Parse heliocentric vel correction"""
         self.hvcorrect = float(field)
+    
+    def parse_yerror(self, field):
+        self.yerror = float(field)
 
     def parse_filename(self, field):
         """If file name is given, check it's the one we were expecting"""
@@ -433,7 +446,13 @@ class SpecDataList(object):
 
     # Lookup table for column name to routine
 
-    routs = dict(specfile = parse_filename, jdate = parse_jdate, modjdate = parse_mjdate, bjdate = parse_bjdate, modbjdate = parse_mbjdate, hvcorrect = parse_hvcorrect)
+    routs = dict(specfile = parse_filename,
+                 jdate = parse_jdate,
+                 modjdate = parse_mjdate,
+                 bjdate = parse_bjdate,
+                 modbjdate = parse_mbjdate,
+                 hvcorrect = parse_hvcorrect,
+                 yerror = parse_yerror)
 
     # End of parsing routines
     #########################
@@ -467,6 +486,7 @@ class SpecDataList(object):
             self.modjdate = 0.0
             self.modbjdate = 0.0
             self.hvcorrect = 0.0
+            self.yerror = None
 
             for n, c in enumerate(self.cols):
                 try:
@@ -489,6 +509,8 @@ class SpecDataList(object):
                     self.modjdate = jd
 
             newarray = SpecDataArray(self.currentfile, self.spdcols, self.modjdate, self.modbjdate, self.hvcorrect)
+            if self.yerror is not None:
+                newarray.yerror = self.yerror
             newarray.listlink = self
             self.datalist.append(newarray)
         if len(filelist) != 0:
