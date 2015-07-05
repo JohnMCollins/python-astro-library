@@ -342,8 +342,9 @@ class SpecDataList(object):
                 self.guessobsfile()
             else:
                 raise SpecDataError("Cannot open obs dir/file " + p)
+            self.objectname = os.path.basename(self.dirname)
         else:
-            self.dirname = self.obsfname = ""
+            self.dirname = self.obsfname = self.objectname = ""
 
         # Set up reference wavelength for calculations of continuum curve
         # (We subtract this from the wavelength in question)
@@ -396,6 +397,7 @@ class SpecDataList(object):
             raise SpecDataError("Invalid directory: " + dir)
         self.resetall()
         self.dirname = dir
+        self.objectname = os.path.basename(self.dirname)
         self.guessobsfile()
         self.dirty = True
 
@@ -409,6 +411,7 @@ class SpecDataList(object):
         if dir == self.dirname and basefile == self.obsfname: return
         self.resetall()
         self.dirname = dir
+        self.objectname = os.path.basename(self.dirname)
         self.obsfname = basefile
         self.dirty = True
 
@@ -707,7 +710,7 @@ class SpecDataList(object):
 
     def load(self, node):
         """Load control file from XML file"""
-        self.dirname = self.obsfname = ""
+        self.dirname = self.obsfname = self.objectname = ""
         self.cols = []
         self.spdcols = []
         self.yoffset = None
@@ -724,6 +727,8 @@ class SpecDataList(object):
                 self.dirname = xmlutil.gettext(child)
             elif tagn == "obsfname":
                 self.obsfname = xmlutil.gettext(child)
+            elif tagn == "objectname":
+                self.objectname = xmlutil.gettext(child)
             elif tagn == "obscols":
                 for ochild in child: self.cols.append(xmlutil.gettext(ochild))
             elif tagn == "spcols":
@@ -748,6 +753,8 @@ class SpecDataList(object):
                     sa.load(dnode)
                     sa.listlink = self
                     self.datalist.append(sa)
+        if len(self.objectname) == 0 and len(self.dirname) != 0:
+            self.objectname = os.path.basename(self.dirname)
         for d in self.datalist:     # Do this last in case data loaded first
             d.cols = self.spdcols
 
@@ -758,6 +765,8 @@ class SpecDataList(object):
             xmlutil.savedata(doc, node, "dirname", self.dirname)
         if len(self.obsfname) != 0:
             xmlutil.savedata(doc, node, "obsfname", self.obsfname)
+        if len(self.objectname) != 0:
+            xmlutil.savedata(doc, node, "objname", self.objectname)
         colsnode = ET.SubElement(node, "obscols")
         for c in self.cols: xmlutil.savedata(doc, colsnode, "oc", c)
         colsnode = ET.SubElement(node, "spcols")

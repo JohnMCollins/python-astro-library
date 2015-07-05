@@ -4,7 +4,7 @@ import string
 import re
 import numpy as np
 
-parser = re.compile('(.+)([smhd])?$', re.I)
+parser = re.compile('(.+?)([smhd])?$', re.I)
 rparser = re.compile('(.+):(.+)/(.+)$')
 
 SECSPERDAY = 3600.0 * 24.0
@@ -28,8 +28,8 @@ def periodarg(arg):
 
     return per * mult[mtch.group(2)]
 
-def periodrange(arg):
-    """Get range of periods in the form start:step:end"""
+def periodrange(arg, asday = True):
+    """Get range of periods in the form start:step:end or start:stop/number converting to days if asday specified"""
 
     rangespecs = string.split(arg, ':')
 
@@ -55,4 +55,6 @@ def periodrange(arg):
         ret = np.linspace(start, stop, numb)
     if len(ret) < 10:
         raise ValueError(arg + " specifies too few intervals")
+    if asday:
+        return  ret / SECSPERDAY
     return  ret

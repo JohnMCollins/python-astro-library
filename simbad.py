@@ -24,11 +24,11 @@ def search_simbad(item):
     return  geturlbody('http://simbad.u-strasbg.fr/simbad/sim-basic?Ident=' + item + '&submit=SIMBAD+search')
 
 def getrv(item):
-
+    """Search SIMBAD database for item name and return RV"""
     bod = search_simbad(item)
     if len(bod) == 0:
-        return 0.0
+        return None
     mtc = rvmatch.search(bod)
     if not mtc:
-        return 0.0
+        return None
     return float(mtc.group(1))
