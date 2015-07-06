@@ -24,12 +24,11 @@ def splittime(separation, timearray, *valuearrays):
     for p in places:
         nextt = ta[lastp:p]
         nextv = list(va[:,lastp:p])
-        if len(nextt) > 1:
-            nextv.insert(0,nextt)
-            results.append(nextv)
+        nextv.insert(0,nextt)
+        results.append(nextv)
         lastp = p
 
-    if lastp < len(ta) -1:
+    if lastp < len(ta):
         nextv = list(va[:,lastp:])
         nextv.insert(0, ta[lastp:])
         results.append(nextv)

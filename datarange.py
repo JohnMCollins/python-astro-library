@@ -74,9 +74,7 @@ class  DataRange(object):
         """Where xvalues and yvalues are numpy arrays of similar shape,
 
         select the xvalues from the range and the corresponding yvalues
-        and return the tuple (xvalues, yvalues)
-
-        Expandby argument lets the range be expanded or contracted by a given proportion"""
+        and return the tuple (xvalues, yvalues)"""
 
         sel = (xvalues >= self.lower) & (xvalues <= self.upper)
         selres = [ xvalues[sel] ]
