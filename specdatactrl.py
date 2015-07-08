@@ -224,13 +224,13 @@ class SpecDataArray(object):
         if scale != 1.0:
             res = res * scale
         return res
-    
+
     def get_yerrors(self, inclall = True):
         """Get Y errors, either from "global" one from the entire spectrum, or from individual lines
- 
+
         Argument gives whether we argue about skipped values (default no)
         File is assumed to be loaded."""
-        
+
         if not inclall:
             sk = self.is_skipped()
             if sk:
@@ -375,8 +375,8 @@ class SpecDataList(object):
 
         # Radial velocity correction
 
-        self.rvcorrect = 0.0 
-        
+        self.rvcorrect = 0.0
+
         # Y scale is such as to make the continuum mean (or possibly median) 1.0
         # Y offset is a vector of coefficients of the fitting polynomial for the continuum
 
@@ -474,7 +474,7 @@ class SpecDataList(object):
     def parse_hvcorrect(self, field):
         """Parse heliocentric vel correction"""
         self.hvcorrect = float(field)
-    
+
     def parse_yerror(self, field):
         self.yerror = float(field)
 
@@ -677,7 +677,7 @@ class SpecDataList(object):
         self.maxminy = None
         self.dirty = True
         return True
-    
+
     def set_rvcorrect(self, newrv):
         """Set new rv correction"""
         if self.rvcorrect == newrv:
@@ -727,7 +727,7 @@ class SpecDataList(object):
                 self.dirname = xmlutil.gettext(child)
             elif tagn == "obsfname":
                 self.obsfname = xmlutil.gettext(child)
-            elif tagn == "objectname":
+            elif tagn == "objname":
                 self.objectname = xmlutil.gettext(child)
             elif tagn == "obscols":
                 for ochild in child: self.cols.append(xmlutil.gettext(ochild))

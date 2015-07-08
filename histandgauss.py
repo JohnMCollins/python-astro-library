@@ -18,5 +18,8 @@ def histandgauss(values, bins=20, colour='blue', histalpha=0.8, plotalpha=1.0):
     mv = values.mean()
     stv = values.std()
 
-    gsv = ss.norm.pdf(sizes, loc=mv, scale=stv) * resc
-    plt.plot(sizes, gsv, color=colour[-1], alpha=plotalpha)
+    # Redo that in case not much hist
+    smoothsizes = np.linspace(sizes.min(), sizes.max(), 500)
+
+    gsv = ss.norm.pdf(smoothsizes, loc=mv, scale=stv) * resc
+    plt.plot(smoothsizes, gsv, color=colour[-1], alpha=plotalpha)
