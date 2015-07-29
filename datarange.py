@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 import xmlutil
 import copy
 import string
+import re
 import numpy as np
 
 class  DataRangeError(Exception):
@@ -139,6 +140,39 @@ class  DataRange(object):
         if self.green != 0: xmlutil.savedata(doc, node, "green", self.green)
         if self.blue != 0: xmlutil.savedata(doc, node, "blue", self.blue)
         xmlutil.savebool(doc, node, "notused", self.notused)
+
+rargparse = re.compile('(!?)([-\d.ed]+)([,:/])([-\d.ed]+)(#[a-f0-9]{6,6})?$')
+
+def ParseArg(arg):
+    """Parse argument as x,y or x:y for range limits or x/w for width w centred on x.
+    
+    Precede arg with ! to select "not used".
+    Follow arg with #nnnnnn to set colour (otherwise black"""
+    
+    mtch = rargparse.match(arg)
+    if mtch is None:
+        raise DataRangeError("Could not parse range arg" + arg)
+    
+    bits = mtch.groups()
+    ret = DataRange()
+    if bits[0] == '!':
+        ret.notused = True
+    l = float(bits[1])
+    u = float(bits[3])
+    if bits[2] == '/':
+        s = u / 2
+        u = l + s
+        l = l - s
+    if l < 0.0 or l >= u:
+        raise DataRangeError("Invalid range in " + arg)
+    ret.lower = l
+    ret.upper = u
+    if bits[4] is not None:
+        cstr = bits[4][1:]
+        ret.red = int(cstr[0:2], 16)
+        ret.green = int(cstr[2:4], 16)
+        ret.blue = int(cstr[4:6], 16)
+    return ret
 
 def MergeRange(a, b):
     """Merge a pair of ranges into one range with the maximum of the two"""
