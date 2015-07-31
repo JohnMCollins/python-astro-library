@@ -2,6 +2,7 @@
 
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.patches as mptch
 import string
 import copy
 import xml.etree.ElementTree as ET
@@ -79,15 +80,27 @@ class Plotter(object):
         else:
             plt.ylim(self.yrange.lower, self.yrange.upper)
 
+        yl, yu = ax.get_ylim()
+        dr = False
         for rn in self.ranges.listranges():
             r = self.ranges.getrange(rn)
             col = r.rgbcolour()
             ls = "-"
             if r.notused: ls = ":"
-            try:    plt.axvline(x=r.lower, color=col, ls=ls)
-            except ValueError: pass
-            try:    plt.axvline(x=r.upper, color=col, ls=ls)
-            except ValueError: pass
+            if r.alpha != 0.0:
+                ax.add_patch(mptch.Rectangle((r.lower, yl), r.upper-r.lower, yu-yl, color=col, alpha=r.alpha))
+                dr = True
+            else:
+                try:
+                    plt.axvline(x=r.lower, color=col, ls=ls)
+                except ValueError:
+                    pass
+                try:
+                    plt.axvline(x=r.upper, color=col, ls=ls)
+                except ValueError:
+                    pass
+        if dr:
+            plt.gcf().canvas.draw()
 
         linelist = []
         if clist is not None:

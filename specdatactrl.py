@@ -45,7 +45,6 @@ def jd_parse_from_filename(fn):
     mtch = Filetimematch.search(fn)
     if mtch is None:
         return None
-        sys.stdout = sys.stderr
     mtchl = list(mtch.groups())
     ms = mtchl.pop()
     mtchl = [ int(m) for m in mtchl ]

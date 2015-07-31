@@ -14,7 +14,7 @@ class  DataRangeError(Exception):
 class  DataRange(object):
     """Class for data ranges, including save options"""
 
-    def __init__(self, lbound = 0.0, ubound = 100.0, descr = "", shortname = "", red = 0, green = 0, blue = 0, notused = False):
+    def __init__(self, lbound = 0.0, ubound = 100.0, descr = "", shortname = "", red = 0, green = 0, blue = 0, alpha = 0.0, notused = False):
         self.lower = lbound
         self.upper = ubound
         self.description = descr
@@ -24,8 +24,10 @@ class  DataRange(object):
             self.red = red & 0xff
             self.green = green & 0xff
             self.blue = blue & 0xff
+            self.alpha = alpha + 0.0
         except TypeError:
             self.red = self.green = self.blue = 0
+            self.alpha
 
     def referable(self):
         """Report if the range can be referred to by the short name.
@@ -70,6 +72,23 @@ class  DataRange(object):
     def rgbcolour(self):
         """Return colour as an RGB constant"""
         return "#%.2x%.2x%.2x" % (self.red, self.green, self.blue)
+    
+    def as_arg(self, centrewidth = False):
+        """Return range as argument suitable for parsing by ParseArg below.
+        
+        If centrewidth is True do as central/width rather than lower:upper"""
+        
+        ret = ""
+        if self.notused: ret = "!"
+        if centrewidth:
+            ret += "%.8g/%.8g" % ((self.upper + self.lower) / 2.0, self.upper-self.lower)
+        else:
+            ret += "%.8g:%.8g" % (self.lower, self.upper)
+        if self.red+self.green+self.blue != 0:
+            ret += self.rgbcolour()
+        if self.alpha != 0.0:
+            ret += "@%.4g" % self.alpha
+        return ret
 
     def select(self, xvalues, *yvalues):
         """Where xvalues and yvalues are numpy arrays of similar shape,
@@ -107,6 +126,7 @@ class  DataRange(object):
         """Load range from XML file"""
         self.description = ""
         self.red = self.green = self.blue = 0
+        self.alpha = 0.0
         self.notused = False
         for child in node:
             tagn = child.tag
@@ -126,6 +146,8 @@ class  DataRange(object):
                 self.blue = xmlutil.getint(child)
             elif tagn == "notused":
                 self.notused = True
+            elif tagn == "alpha":
+                self.alpha = xmlutil.getfloat(child)
 
     def save(self, doc, pnode, name):
         """Save range to XML file"""
@@ -139,9 +161,10 @@ class  DataRange(object):
         if self.red != 0: xmlutil.savedata(doc, node, "red", self.red)
         if self.green != 0: xmlutil.savedata(doc, node, "green", self.green)
         if self.blue != 0: xmlutil.savedata(doc, node, "blue", self.blue)
+        if self.alpha != 0.0: xmlutil.savedata(doc, node, "alpha", self.alpha)
         xmlutil.savebool(doc, node, "notused", self.notused)
 
-rargparse = re.compile('(!?)([-\d.ed]+)([,:/])([-\d.ed]+)(#[a-f0-9]{6,6})?$')
+rargparse = re.compile('(!?)([-\d.ed]+)([,:/])([-\d.ed]+)(#[a-f0-9]{6,6})?(@[-\d.ed]+)?$')
 
 def ParseArg(arg):
     """Parse argument as x,y or x:y for range limits or x/w for width w centred on x.
@@ -151,27 +174,34 @@ def ParseArg(arg):
     
     mtch = rargparse.match(arg)
     if mtch is None:
-        raise DataRangeError("Could not parse range arg" + arg)
-    
+        raise DataRangeError("Could not parse range arg " + arg)
+
     bits = mtch.groups()
     ret = DataRange()
-    if bits[0] == '!':
-        ret.notused = True
-    l = float(bits[1])
-    u = float(bits[3])
-    if bits[2] == '/':
-        s = u / 2
-        u = l + s
-        l = l - s
-    if l < 0.0 or l >= u:
-        raise DataRangeError("Invalid range in " + arg)
-    ret.lower = l
-    ret.upper = u
-    if bits[4] is not None:
-        cstr = bits[4][1:]
-        ret.red = int(cstr[0:2], 16)
-        ret.green = int(cstr[2:4], 16)
-        ret.blue = int(cstr[4:6], 16)
+    try:
+        if bits[0] == '!':
+            ret.notused = True
+        l = float(bits[1])
+        u = float(bits[3])
+        if bits[2] == '/':
+            s = u / 2
+            u = l + s
+            l = l - s
+        if l < 0.0 or l >= u:
+            raise DataRangeError("Invalid range in arg " + arg)
+        ret.lower = l
+        ret.upper = u
+        if bits[4] is not None:
+            cstr = bits[4][1:]
+            ret.red = int(cstr[0:2], 16)
+            ret.green = int(cstr[2:4], 16)
+            ret.blue = int(cstr[4:6], 16)
+        if bits[5] is not None:
+            ret.alpha = float(bits[5][1:])
+            if ret.alpha < 0.0 or ret.alpha > 1.0:
+                raise DataRangeError("Invalid alpha value in arg " + arg)
+    except (ValueError, TypeError, IndexError) as e:
+        raise DataRangeError("Invalid range arg - " + e.args[0])
     return ret
 
 def MergeRange(a, b):
