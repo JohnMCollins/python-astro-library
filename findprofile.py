@@ -47,7 +47,7 @@ def removemaxminmax(maxes, mins):
     resmins = list(mins)
 
     for m in maxes:
-        if m+1 in mins and m+2 in maxes:
+        if m in resmaxes and m+1 in resmins and m+2 in resmaxes:
             resmins.remove(m+1)
             resmaxes.remove(m+2)
             resmaxes[resmaxes.index(m)] = m+1

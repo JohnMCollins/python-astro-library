@@ -72,12 +72,12 @@ class  DataRange(object):
     def rgbcolour(self):
         """Return colour as an RGB constant"""
         return "#%.2x%.2x%.2x" % (self.red, self.green, self.blue)
-    
+
     def as_arg(self, centrewidth = False):
         """Return range as argument suitable for parsing by ParseArg below.
-        
+
         If centrewidth is True do as central/width rather than lower:upper"""
-        
+
         ret = ""
         if self.notused: ret = "!"
         if centrewidth:
@@ -168,10 +168,10 @@ rargparse = re.compile('(!?)([-\d.ed]+)([,:/])([-\d.ed]+)(#[a-f0-9]{6,6})?(@[-\d
 
 def ParseArg(arg):
     """Parse argument as x,y or x:y for range limits or x/w for width w centred on x.
-    
+
     Precede arg with ! to select "not used".
     Follow arg with #nnnnnn to set colour (otherwise black"""
-    
+
     mtch = rargparse.match(arg)
     if mtch is None:
         raise DataRangeError("Could not parse range arg " + arg)

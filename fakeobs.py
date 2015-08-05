@@ -1,8 +1,17 @@
 import re
 
-def getfakeobs(filename):
+def getfakeobs(filename, suffix = None):
     """Get contents of fake observation file as a dictionary.
-    Return None if invalid or cannot open"""
+    Return None if invalid or cannot open
+    Add optional suffix to file names"""
+
+    if suffix is None:
+        suffix = ""
+    try:
+        if suffix[0] != '.':
+            suffix = '.' + suffix
+    except IndexError:
+        pass
 
     try:
         inf = open(filename, 'r')
@@ -19,7 +28,7 @@ def getfakeobs(filename):
             if not mtch: raise ValueError
             fname = mtch.group(1)
             ot = float(mtch.group(2))
-            red[fname] = ot
+            red[fname + suffix] = ot
         return  red
     except ValueError:
         return  None
