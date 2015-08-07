@@ -164,7 +164,7 @@ class  DataRange(object):
         if self.alpha != 0.0: xmlutil.savedata(doc, node, "alpha", self.alpha)
         xmlutil.savebool(doc, node, "notused", self.notused)
 
-rargparse = re.compile('(!?)([-\d.ed]+)([,:/])([-\d.ed]+)(#[a-f0-9]{6,6})?(@[-\d.ed]+)?$')
+rargparse = re.compile('(\!?)([-\d.edED]+)([,:/])([-\d.edED]+)(\#[a-fA-F0-9]{6,6})?(@[-\d.edED]+)?$')
 
 def ParseArg(arg):
     """Parse argument as x,y or x:y for range limits or x/w for width w centred on x.
@@ -184,7 +184,7 @@ def ParseArg(arg):
         l = float(bits[1])
         u = float(bits[3])
         if bits[2] == '/':
-            s = u / 2
+            s = u / 2.0
             u = l + s
             l = l - s
         if l < 0.0 or l >= u:
