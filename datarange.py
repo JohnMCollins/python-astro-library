@@ -187,7 +187,7 @@ def ParseArg(arg):
             s = u / 2.0
             u = l + s
             l = l - s
-        if l < 0.0 or l >= u:
+        if l >= u:
             raise DataRangeError("Invalid range in arg " + arg)
         ret.lower = l
         ret.upper = u

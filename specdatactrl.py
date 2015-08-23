@@ -188,6 +188,30 @@ class SpecDataArray(object):
             raise SpecDataError("Link error missing in " + self.filename)
         return res
 
+    def apply_y_scale_offset(self, yvalues):
+        """Apply Y scale and offset settings, used for both Y values and error values"""
+        
+        # Don't use += or similar below the first time or the whole array will be mangled
+        # Apply scaling and offsets - change - now individual was cumulative.
+
+        try:
+            scale = self.listlink.yscale
+            moffs = self.listlink.yoffset
+        except (AttributeError, TypeError):
+            raise SpecDataError("Link error missing in " + self.filename)
+
+        scale *= self.yscale
+
+        # NB apply offset before we apply scale
+
+        if moffs is not None:
+            yvalues = yvalues / np.polyval(moffs, self.get_xvalues(True) - self.listlink.refwavelength)
+        if self.yoffset is not None:
+            yvalues = yvalues / np.polyval(self.yoffset, self.get_xvalues(True) - self.listlink.refwavelength)
+        if scale != 1.0:
+            yvalues = yvalues * scale
+        return yvalues
+  
     def get_yvalues(self, inclall = True):
         """Get Y values after applying offset and scaling
 
@@ -203,26 +227,7 @@ class SpecDataArray(object):
         if res is None:
             raise SpecDataError("Data for " + self.filename + " is not loaded")
 
-        # Don't use += or similar below the first time or the whole array will be mangled
-        # Apply scaling and offsets - change - now individual was cumulative.
-
-        try:
-            scale = self.listlink.yscale
-            moffs = self.listlink.yoffset
-        except (AttributeError, TypeError):
-            raise SpecDataError("Link error missing in " + self.filename)
-
-        scale *= self.yscale
-
-        # NB apply offset before we apply scale
-
-        if moffs is not None:
-            res = res / np.polyval(moffs, self.get_xvalues(True) - self.listlink.refwavelength)
-        if self.yoffset is not None:
-            res = res / np.polyval(self.yoffset, self.get_xvalues(True) - self.listlink.refwavelength)
-        if scale != 1.0:
-            res = res * scale
-        return res
+        return self.apply_y_scale_offset(res)
 
     def get_yerrors(self, inclall = True):
         """Get Y errors, either from "global" one from the entire spectrum, or from individual lines
@@ -237,11 +242,14 @@ class SpecDataArray(object):
         if self.yerr is None:
             if self.yvalues is None:
                 raise SpecDataError("Data for " + self.filename + " is not loaded")
-            try:
-                return np.zeros_like(self.yvalues) + self.listlink.yerror
-            except (AttributeError, TypeError):
-                raise SpecDataError("Link error missing in " + self.filename)
-        return self.yerr
+            res = np.zeros_like(self.yvalues)
+            if self.yerror is None:
+                return  res
+            res += self.yerror
+        else:
+            res = self.yerr
+        
+        return self.apply_y_scale_offset(res)
 
     def getmaxminx(self, inclall = True):
         """Return tuple of mininmum and maximum x"""
