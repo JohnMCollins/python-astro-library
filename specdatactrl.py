@@ -211,6 +211,13 @@ class SpecDataArray(object):
         if scale != 1.0:
             yvalues = yvalues * scale
         return yvalues
+    
+    def get_raw_yvalues(self):
+        """Get unadjusted Y values for comparison with other ways of doing things"""
+        res = self.yvalues
+        if res is None:
+            raise SpecDataError("Data for " + self.filename + " is not loaded")
+        return  res
   
     def get_yvalues(self, inclall = True):
         """Get Y values after applying offset and scaling
