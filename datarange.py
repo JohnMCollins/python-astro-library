@@ -188,7 +188,9 @@ def ParseArg(arg):
             u = l + s
             l = l - s
         if l >= u:
-            raise DataRangeError("Invalid range in arg " + arg)
+            t = l
+            l = u
+            u = t
         ret.lower = l
         ret.upper = u
         if bits[4] is not None:
