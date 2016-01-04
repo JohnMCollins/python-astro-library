@@ -46,6 +46,7 @@ def parserange(arg):
 
     if arg is None: return None
 
+    arg = string.replace(arg, ':', ',')
     bits = string.split(arg, ',')
     try:
         if len(bits) == 1:
