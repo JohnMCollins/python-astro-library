@@ -113,6 +113,19 @@ class  DataRange(object):
         for yv in yvalues:
             selres.append(yv[sel])
         return selres
+ 
+    def invert(self, nlbound = -1e50, nubound = 1e50):
+        """Invert a range by splitting into 2 ranges which sselect the opposite
+
+        nlbound is new lower bound and nubound is new upper bound"""
+
+        lrange = copy.copy(self)
+        urange = copy.copy(self)
+        lrange.upper = self.lower
+        urange.lower = self.upper
+        lrange.lower = nlbound
+        urange.upper = nubound
+        return (lrange,urange)
 
     def argselect(self, xvalues):
         """Return the indices of the ends of the range delineated by the selection"""
