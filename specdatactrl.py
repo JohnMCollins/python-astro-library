@@ -236,7 +236,7 @@ class SpecDataArray(object):
 
         return self.apply_y_scale_offset(res)
 
-    def get_yerrors(self, inclall = True):
+    def get_yerrors(self, inclall = True, rawvals=False):
         """Get Y errors, either from "global" one from the entire spectrum, or from individual lines
 
         Argument gives whether we argue about skipped values (default no)
@@ -256,6 +256,8 @@ class SpecDataArray(object):
         else:
             res = self.yerr
         
+        if rawvals:
+            return res
         return self.apply_y_scale_offset(res)
 
     def getmaxminx(self, inclall = True):

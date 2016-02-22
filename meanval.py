@@ -1,6 +1,7 @@
 # Use scipy/numpy to integrate over range and get mean value
 
 import numpy as np
+import math
 import scipy.integrate as si
 
 def interpfill(indx, targx, xvals, yvals):
@@ -14,7 +15,7 @@ def interpfill(indx, targx, xvals, yvals):
     y1 = yvals[indx+1]
     return (targx, y0 + ((y1 - y0)/(x1 - x0)) * (targx - x0))
 
-def mean_value(rangev, xvalues, yvalues):
+def mean_value(rangev, xvalues, yvalues, yerrs = None, interpolate = True):
     """Get mean value by integration of y values
 
     First arg is datarange object
@@ -24,11 +25,11 @@ def mean_value(rangev, xvalues, yvalues):
 
     lowend, highend = np.searchsorted(xvalues, (rangev.lower, rangev.upper))
     selx = xvalues[lowend:highend]
-    sely = yvalues[lowend:highend]
+    sely = yvalues[lowend:highend]       
     
     # Don't do any interpolation stuff if the range isn't entirely within the values
     
-    if lowend > 0 and highend < len(xvalues) - 1:
+    if interpolate and lowend > 0 and highend < len(xvalues) - 1:
         
         if xvalues[lowend] != rangev.lower:
             
@@ -43,4 +44,8 @@ def mean_value(rangev, xvalues, yvalues):
             sely = np.concatenate((sely, (y,)))
 
     integ = si.trapz(sely, selx)
-    return (max(selx)-min(selx), integ)
+    wid = max(selx) - min(selx)
+    if yerrs is None:
+        return (wid, integ)
+    rete = math.sqrt(np.sum(np.square(yerrs[lowend:highend]))) * wid 
+    return (wid, integ, rete)
