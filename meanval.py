@@ -5,10 +5,10 @@ import math
 import scipy.integrate as si
 
 def interpfill(indx, targx, xvals, yvals):
-    
+
     """Generate a point by interpolation between indx and indx+1
     to give a target x value of targx and return (x, y)"""
-    
+
     x0 = xvals[indx]
     x1 = xvals[indx+1]
     y0 = yvals[indx]
@@ -25,20 +25,20 @@ def mean_value(rangev, xvalues, yvalues, yerrs = None, interpolate = True):
 
     lowend, highend = np.searchsorted(xvalues, (rangev.lower, rangev.upper))
     selx = xvalues[lowend:highend]
-    sely = yvalues[lowend:highend]       
-    
+    sely = yvalues[lowend:highend]
+
     # Don't do any interpolation stuff if the range isn't entirely within the values
-    
+
     if interpolate and lowend > 0 and highend < len(xvalues) - 1:
-        
+
         if xvalues[lowend] != rangev.lower:
-            
+
             x, y = interpfill(lowend, rangev.lower, xvalues, yvalues)
             selx = np.concatenate(((x,), selx))
             sely = np.concatenate(((y,), sely))
-        
+
         if xvalues[highend] != rangev.upper:
-            
+
             x,y, = interpfill(lowend, rangev.upper, xvalues, yvalues)
             selx = np.concatenate((selx, (x,)))
             sely = np.concatenate((sely, (y,)))
@@ -47,5 +47,5 @@ def mean_value(rangev, xvalues, yvalues, yerrs = None, interpolate = True):
     wid = max(selx) - min(selx)
     if yerrs is None:
         return (wid, integ)
-    rete = math.sqrt(np.sum(np.square(yerrs[lowend:highend]))) * wid 
+    rete = math.sqrt(np.sum(np.square(yerrs[lowend:highend]))) * wid
     return (wid, integ, rete)
