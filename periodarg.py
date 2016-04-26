@@ -3,6 +3,8 @@
 import string
 import re
 import numpy as np
+import os
+import sys
 
 parser = re.compile('(.+?)([smhd])?$', re.I)
 rparser = re.compile('(.+):(.+)/(.+)$')
@@ -58,3 +60,18 @@ def periodrange(arg, asday = True):
     if asday:
         return  ret / SECSPERDAY
     return  ret
+
+def optperiodrange(arg):
+    """Get period argument from the environment if not specified or apply default"""
+    if arg is None:
+        try:
+            arg = os.environ['PERIODS']
+        except KeyError:
+            arg = "1d:.01d:100d"
+    try:
+        return periodrange(arg)
+    except ValueError as e:
+        sys.stdout = sys.stderr
+        print "Invalid period arg", e.args[0]
+        sys.stdout = sys.__stdout__
+        raise
