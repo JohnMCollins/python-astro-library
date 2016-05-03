@@ -2,9 +2,11 @@
 
 import string
 
-def hassuffix(st, suff):
-    """Return whether string (usually file name) has given suffix"""
+def hassuffix(st, suff = None):
+    """Return whether string (usually file name) has given suffix or any suffix at all"""        
     try:
+        if suff is None:
+            return st.rindex('.') < len(st)
         if suff[0] != '.':
             suff = '.' + suff
         if st[st.rindex(suff):] == suff: return True
