@@ -3,19 +3,9 @@
 import numpy as np
 import math
 import scipy.integrate as si
+import interpfill
 
-def interpfill(indx, targx, xvals, yvals):
-
-    """Generate a point by interpolation between indx and indx+1
-    to give a target x value of targx and return (x, y)"""
-
-    x0 = xvals[indx]
-    x1 = xvals[indx+1]
-    y0 = yvals[indx]
-    y1 = yvals[indx+1]
-    return (targx, y0 + ((y1 - y0)/(x1 - x0)) * (targx - x0))
-
-def mean_value(rangev, xvalues, yvalues, yerrs = None, interpolate = True):
+def mean_value(rangev, xvalues, yvalues, yerrs = None, interpolate = False):
     """Get mean value by integration of y values
 
     First arg is datarange object
@@ -33,13 +23,13 @@ def mean_value(rangev, xvalues, yvalues, yerrs = None, interpolate = True):
 
         if xvalues[lowend] != rangev.lower:
 
-            x, y = interpfill(lowend, rangev.lower, xvalues, yvalues)
+            x, y = interpfill.interpfill(lowend, rangev.lower, xvalues, yvalues)
             selx = np.concatenate(((x,), selx))
             sely = np.concatenate(((y,), sely))
 
         if xvalues[highend] != rangev.upper:
 
-            x,y, = interpfill(lowend, rangev.upper, xvalues, yvalues)
+            x,y, = interpfill.interpfill(highend, rangev.upper, xvalues, yvalues)
             selx = np.concatenate((selx, (x,)))
             sely = np.concatenate((sely, (y,)))
 
