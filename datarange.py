@@ -113,7 +113,38 @@ class  DataRange(object):
         for yv in yvalues:
             selres.append(yv[sel])
         return selres
- 
+
+    def interpy(self, targx, x0, x1, y0, y1):
+        """Interpolate an x,y pair from sequence"""
+        return (targx, y0 + ((y1 - y0)/(x1 - x0)) * (targx - x0))
+
+    def select_interpolate(self, xvalues, yvalues, yerrors = None):
+        """Slect xvalues and yvalues from numpy arrays of similar shape
+        
+        Interpolate points if required at the beginning and end of the range.
+        If error array is that put in a mean value for the rror term"""
+
+        lngth = len(xvalues)
+        lowend, highend = np.searchsorted(xvalues, (self.lower, self.upper))
+        xvals = xvalues[lowend:highend]
+        yvals = yvalues[lowend:highend]
+        yerrs = None
+        if yerrors is not None:
+            yerrs = yerrors[lowend:highend]
+        if lowend > 0 and lowend < lngth and xvalues[lowend] != self.lower:
+            newx, newy = self.interpy(self.lower, xvalues[lowend-1], xvalues[lowend], yvalues[lowend-1], yvalues[lowend])
+            xvals = np.concatenate(((newx,), xvals))
+            yvals = np.concatenate(((newy,), yvals))
+            if yerrors is not None:
+                yerrs = np.concatenate((((yerrors[lowend-1] + yerrors[lowend])/ 2.0,), yerrs))
+        if highend > 0  and  highend < lngth and xvalues[highend] != self.upper:
+            newx, newy = self.interpy(self.upper, xvalues[highend-1], xvalues[highend], yvalues[highend-1], yvalues[highend])
+            xvals = np.concatenate((xvals, (newx,)))
+            yvals = np.concatenate((yvals, (newy,)))
+            if yerrors is not None:
+                yerrs = np.concatenate((yerrs, ((yerrors[highend-1] + yerrors[highend])/ 2.0,)))
+        return  (xvals, yvals, yerrs)
+
     def invert(self, nlbound = -1e50, nubound = 1e50):
         """Invert a range by splitting into 2 ranges which sselect the opposite
 
