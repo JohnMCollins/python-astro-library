@@ -12,10 +12,16 @@ def mean_value(rangev, xvalues, yvalues, yerrs = None, interpolate = False):
     Third argument is y values
     Return tuple with x range and integration result"""
 
-    if interpolate:
-        selx, sely, sele = rangev.select_interpolate(xvalues, yvalues, yerrs)
+    if yerrs is None:
+        if interpolate:
+            selx, sely = rangev.select_interpolate(xvalues, yvalues)
+        else:
+            selx, sely = rangev.select(xvalues, yvalues)
     else:
-        selx, sely, sele = rangev.select(xvalues, yvalues, yerrs)
+        if interpolate:
+            selx, sely, sele = rangev.select_interpolate(xvalues, yvalues, yerrs)
+        else:
+            selx, sely, sele = rangev.select(xvalues, yvalues, yerrs)
 
     integ = si.trapz(sely, selx)
     wid = max(selx) - min(selx)
