@@ -101,6 +101,27 @@ class  DataRange(object):
         for yv in yvalues:
             selres.append(yv[sel])
         return selres
+    
+    def select_triang(self, xvalues, *yvalues):
+        """Where xvalues and yvalues are numpy arrays of similar shape,
+
+        select the xvalues from the range and the corresponding yvalues
+        applying a triangle with base across the range and vertex at centre
+        and return the tuple (xvalues, yvalues)"""
+        
+        sel = (xvalues >= self.lower) & (xvalues <= self.upper)
+        xvs = xvalues[sel]
+        middle = (self.upper + self.lower) / 2.0
+        leftx = xvs[xvs <= middle]
+        rightx = xvs[xvs > middle]
+        slope = 2.0 / (self.upper - self.lower)
+        leftmult = (leftx - self.lower) * slope
+        rightmult = (self.upper - rightx) * slope
+        mult = np.concatenate((leftmult, rightmult))
+        selres = [ xvs ]
+        for yv in yvalues:
+            selres.append(yv[sel] * mult)
+        return selres
 
     def selectnot(self, xvalues, *yvalues):
         """Where xvalues and yvalues are numpy arrays of similar shape,

@@ -25,7 +25,8 @@ Obsfields = (('specfile', 'Spectrum filename'),
              ('bjdate', 'Barycentric Julian Date'),
              ('modbjdate', 'Modified Barycentric Date'),
              ('hvcorrect', 'Heliocentric Velocity Correction'),
-             ('yerror', 'Y error for all of dataset'))
+             ('yerror', 'Y error for all of dataset'),
+             ('ysnr', 'Signal to noise for all of dataset'))
 
 # Possible columns in spectral data file
 
@@ -85,8 +86,10 @@ class SpecDataArray(object):
         # yerr is a possible array of values
         # yerror is a single value for everything
         # with both yerr takes precedence
+        # ysnr is alternative signal to noise
         self.yerr = None
         self.yerror = None
+        self.ysnr = None
 
         # Mod Jdate and Mod Barycentric Jdate
         # It is a mistake not to have the latter set
@@ -246,6 +249,12 @@ class SpecDataArray(object):
             sk = self.is_skipped()
             if sk:
                 raise SpecDataError("Discounted data", self.filename, sk)
+        if self.ysnr is not None:
+            if rawvals:
+                yvals = self.get_raw_yvalues()
+            else:
+                yvals = self.get_yvalues()
+            return  np.zeros_like(yvals) + np.sqrt(np.mean(np.square(yvals))) / self.ysnr
         if self.yerr is None:
             if self.yvalues is None:
                 raise SpecDataError("Data for " + self.filename + " is not loaded")
@@ -279,6 +288,7 @@ class SpecDataArray(object):
         self.yvalues = None
         self.yerr = None
         self.yerror = None
+        self.ysnr = None
         self.modjdate = 0.0
         self.modbjdate = 0.0
         self.hvcorrect = 0.0
@@ -304,6 +314,8 @@ class SpecDataArray(object):
                 self.hvcorrect = xmlutil.getfloat(child)
             elif tagn == "yerror":
                 self.yerror = xmlutil.getfloat(child)
+            elif tagn == "ysnr":
+                self.ysnr = xmlutil.getfloat(child)
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
@@ -324,6 +336,8 @@ class SpecDataArray(object):
             xmlutil.savedata(doc, node, "hvcorrect", self.hvcorrect)
         if self.yerror is not None:
             xmlutil.savedata(doc, node, "yerror", self.yerror)
+        if self.ysnr is not None:
+            xmlutil.savedata(doc, node, "ysnr", self.ysnr)
 
 def parse_jd(field):
     """Parse Julian date, checking it looks right"""
@@ -381,6 +395,7 @@ class SpecDataList(object):
         self.modbjdate = 0.0
         self.hvcorrect = 0.0
         self.yerror = None
+        self.ysnr = None
 
     def is_complete(self):
         """Report whether file is complete"""
@@ -493,6 +508,9 @@ class SpecDataList(object):
 
     def parse_yerror(self, field):
         self.yerror = float(field)
+    
+    def parse_ysnr(self, field):
+        self.ysnr = float(field)
 
     def parse_filename(self, field):
         """If file name is given, check it's the one we were expecting"""
@@ -507,7 +525,8 @@ class SpecDataList(object):
                  bjdate = parse_bjdate,
                  modbjdate = parse_mbjdate,
                  hvcorrect = parse_hvcorrect,
-                 yerror = parse_yerror)
+                 yerror = parse_yerror,
+                 ysnr = parse_ysnr)
 
     # End of parsing routines
     #########################
@@ -542,6 +561,7 @@ class SpecDataList(object):
             self.modbjdate = 0.0
             self.hvcorrect = 0.0
             self.yerror = None
+            self.ysnr = None
 
             for n, c in enumerate(self.cols):
                 try:
@@ -566,6 +586,8 @@ class SpecDataList(object):
             newarray = SpecDataArray(self.currentfile, self.spdcols, self.modjdate, self.modbjdate, self.hvcorrect)
             if self.yerror is not None:
                 newarray.yerror = self.yerror
+            if self.ysnr is not None:
+                newarray.ysnr = self.ysnr
             newarray.listlink = self
             self.datalist.append(newarray)
         if len(filelist) != 0:
