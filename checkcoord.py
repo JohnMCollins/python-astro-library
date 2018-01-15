@@ -2,7 +2,7 @@
 
 import numpy as np
 
-def checkcoord(w, imagedata, radec, searchwidth):
+def checkcoord(w, imagedata, radec, searchwidth, apwidth = 6):
     """Work out if given target is within image with enough room for search for actual object.
     
     Aargs are:
@@ -11,6 +11,7 @@ def checkcoord(w, imagedata, radec, searchwidth):
         imagedata - Image data, don't actuallylook at this we just want the sizes
         radec - tuple with (RA, DEC) of object
         searchwidth - pixels we search either way
+        apwidth - aperture width
         
     Returns:
     
@@ -26,7 +27,8 @@ def checkcoord(w, imagedata, radec, searchwidth):
     raobj, decobj = radec
     if raobj <= ramin or raobj >= ramax: return 2
     if decobj <= decmin or decobj >= decmax: return 2
+    cwidth = searchwidth + apwidth
     objx, objy = w.wcs_world2pix(np.array([radec]), 0).flatten()
-    if objx <= searchwidth or objx >= searchwidth + pixcols: return 1
-    if objy <= searchwidth or objy >= searchwidth + pixcols: return 1
+    if objx <= cwidth or objx >= cwidth + pixcols: return 1
+    if objy <= cwidth or objy >= cwidth + pixcols: return 1
     return 0
