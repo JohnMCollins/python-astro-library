@@ -44,8 +44,12 @@ def findobjadu(w, imagedata, radec, searchwidth, apwidth = 6):
     coordlist = []
     dists = []
     for yr in range(-searchwidth-1, searchwidth + 1):
+        if objy + yr - apwidth < 0: continue
+        if objy + yr + apwidth >= pixcols: break
         ysq = yr * yr
         for xr in range(-searchwidth-1, searchwidth + 1):
+            if objx + xr - apwidth < 0: continue
+            if objx + xr + apwidth >= pixcols: break
             xsq = xr * xr
             dist = xsq + ysq
             if dist > swsq:
