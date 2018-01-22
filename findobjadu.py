@@ -50,8 +50,8 @@ def findobjadu(w, imagedata, radec, searchwidth, apwidth = 6):
             dist = xsq + ysq
             if dist > swsq:
                 continue
-            rmask = np.roll(redimage, (-yr, -xr), (0,1))
-            adulist.append(np.sum(redimage * mask))
+            rmask = np.roll(mask, (-yr, -xr), (0,1))
+            adulist.append(np.sum(redimage * rmask))
             coordlist.append((objx+xr, objy+yr))
             dists.append(dist)
     
