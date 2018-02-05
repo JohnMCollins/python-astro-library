@@ -62,6 +62,7 @@ def findobjadu(w, imagedata, radec, searchwidth, apwidth = 6):
     # Find the maximum ADU - if more than one fit the bill, take the closest
     # maybe we want a weighting?
     
+    if len(adulist) == 0: return None
     mx = max(adulist)
     if mx <= 0.0: return None
     adulist = np.array(adulist)

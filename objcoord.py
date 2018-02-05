@@ -4,25 +4,25 @@ from astroquery.simbad import Simbad
 from astropy import coordinates
 import astropy.units as u
 import re
+import string
 
-def coord2objs(ra, dec, radius=2, objtype = None):
+def coord2objs(ra, dec, radius=2, extras = False):
     """Get objects within given radius of given ra/dec as decimal degrees.
     If object type given, restrict to that"""
     
     sk = coordinates.SkyCoord(ra=ra, dec=dec, unit=u.deg)
     rad = radius * u.arcmin
     sb = Simbad()
-    sb.add_votable_fields('otype')
+    sb.add_votable_fields('id', 'otype')
     sres = sb.query_region(sk, radius=rad)
     if sres is None: return []
     ids = [id for id in sres['MAIN_ID']]
-    if objtype is None:
-        return ids
+    if not extras: return ids
     otypes = [ot for ot in sres['OTYPE']]
+    idas = [string.split(oid, ', ') for oid in sres['ID']]
     resids = []
-    for ob,nxt in zip(otypes,ids):
-        if ob in objtype:
-            resids.append(nxt)
+    for n in zip(ids, idas, otypes):
+        resids.append(n)
     return resids
 
 def obj2coord(obj):

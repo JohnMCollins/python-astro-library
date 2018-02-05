@@ -37,7 +37,7 @@ def findimagelocs(imagedata, sign, apwidth = 6):
                 adus = np.sum(imagedata[srow-apwidth:srow+apwidth+1,xp:xp+arng] * mask)
                 if adus >= sign:
                     newres = (xp+apwidth, srow, adus)
-                    if newres not in results:                    
+                    if newres not in results:  
                         results.append(newres)
 
     results.sort(key=lambda x: x[2], reverse=True)
