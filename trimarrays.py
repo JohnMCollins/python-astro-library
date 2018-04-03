@@ -31,4 +31,3 @@ def trimto(arr, *arrs):
     
     return tuple(result)
 
-    
