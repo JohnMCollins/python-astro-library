@@ -31,3 +31,14 @@ def trimto(arr, *arrs):
     
     return tuple(result)
 
+def trimzeros(arr):
+    
+    """Fraim trailing parts of ARRAY WHICH ARE ZEROS"""
+    
+    while np.count_nonzero(arr[-1]) == 0:
+        arr = arr[0:-1]
+
+    while np.count_nonzero(arr[:,-1]) == 0:
+        arr = arr[:,0:-1]
+    
+    return arr

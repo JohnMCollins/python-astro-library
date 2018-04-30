@@ -10,7 +10,7 @@ def hassuffix(st, suff = None):
         if suff[0] != '.':
             suff = '.' + suff
         if st[st.rindex(suff):] == suff: return True
-    except ValueError, IndexError:
+    except (ValueError, IndexError):
         pass
     return False
 
