@@ -11,7 +11,7 @@ import xmlutil
 SPI_DOC_NAME = "OBJINFO"
 SPI_DOC_ROOT = "objinfo"
 
-SUFFIX = 'obj'
+SUFFIX = 'objinf'
 
 class  ObjDataError(Exception):
     """Class to report errors concerning individual objects"""
@@ -75,6 +75,7 @@ class ObjData(object):
         self.rightasc = RaDec(value = ra)
         self.decl = RaDec(value = dec)
         self.mag = mag
+        self.magerr = None
     
     def load(self, node):
         """Load object data from node"""
@@ -85,6 +86,7 @@ class ObjData(object):
         self.rightasc = None
         self.decl = None
         self.mag = None
+        self.magerr = None
         for child in node:
             tagn = child.tag
             if tagn == "name":
@@ -103,6 +105,8 @@ class ObjData(object):
                 self.decl.load(child)
             elif tagn == "mag":
                 self.mag = xmlutil.getfloat(child)
+            elif tagn == "magerr":
+                self.magerr = xmlutil.getfloat(child)
     
     def save(self, doc, pnode, name):
         """Save object data tp node"""
@@ -121,6 +125,8 @@ class ObjData(object):
             self.decl.save(doc, node, "decl")
         if self.mag is not None:
             xmlutil.savedata(doc, node, "mag", self.mag)
+        if self.magerr is not None:
+            xmlutil.savedata(doc, node, "magerr", self.magerr)
     
     def get_ra(self):
         """Get RA value"""
@@ -244,6 +250,7 @@ class  ObjInfo(object):
 
     def loadfile(self, filename):
         """Load up a filename"""
+        filename = miscutils.add_suffix(filename, SUFFIX)
         try:
             self.xmldoc, self.xmlroot = xmlutil.load_file(filename, SPI_DOC_ROOT)
             self.filename = filename
@@ -270,7 +277,7 @@ class  ObjInfo(object):
     def savefile(self, filename = None):
         """Save stuff to file"""
         outfile = self.filename
-        if filename is not None: outfile = filename
+        if filename is not None: outfile = miscutils.add_suffix(filename, SUFFIX)
         if outfile is None:
             raise ObjInfoError("No out file given")
         try:
