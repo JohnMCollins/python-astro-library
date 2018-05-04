@@ -67,8 +67,9 @@ class RaDec(object):
 class ObjData(object):
     """Decreipt an individaul object"""
     
-    def __init__(self, objname = None, objtype = None, dist = None, rv = None, ra = None, dec = None, mag = None):
+    def __init__(self, objname = None, sbname = None, objtype = None, dist = None, rv = None, ra = None, dec = None, mag = None):
         self.objname = objname
+        self.sbname = sbname
         self.objtype = objtype
         self.dist = dist
         self.rv = rv
@@ -80,6 +81,7 @@ class ObjData(object):
     def load(self, node):
         """Load object data from node"""
         self.objname = None
+        self.sbname = None
         self.objtype = None
         self.dist = None
         self.rv = None
@@ -91,6 +93,8 @@ class ObjData(object):
             tagn = child.tag
             if tagn == "name":
                 self.objname = xmlutil.gettext(child)
+            elif tagn == "sbname":
+                self.sbname = xmlutil.gettext(child)
             elif tagn == "type":
                 self.objtype = xmlutil.gettext(child)
             elif tagn == "dist":
@@ -113,6 +117,8 @@ class ObjData(object):
         node = ET.SubElement(pnode, name)
         if self.objname is not None:
             xmlutil.savedata(doc, node, "name", self.objname)
+        if self.objname is not None:
+            xmlutil.savedata(doc, node, "sbname", self.sbname)
         if self.objtype is not None:
             xmlutil.savedata(doc, node, "type", self.objtype)
         if self.dist is not None:
@@ -180,6 +186,7 @@ class  ObjInfo(object):
         self.objects = dict()
         self.alias2name = dict()
         self.name2alias = dict()
+        self.sbnames = dict()
                
     def has_file(self):
         return self.filename is not None
@@ -194,6 +201,8 @@ class  ObjInfo(object):
         if objn in self.alias2name:
             raise ObjInfoError("Object name " + objn + " clashes w)th existing alias")
         self.objects[objn] = obj
+        if obj.sbname is not None:
+            self.sbnames[obj.sbname] = obj
     
     def del_object(self, obj):
         """Delete object from database"""
@@ -207,6 +216,12 @@ class  ObjInfo(object):
         for k, v in dict(self.alias2name).items():
             if v == objn:
                 del self.alias2name[k]
+        if obj.sbname is not None:
+            del self.sbnames[obj.sbname]
+    
+    def is_defined(self, name):
+        """Report whether defined"""
+        return  name in self.objects or name in self.alias2name or name in self.sbnames
     
     def get_object(self, name):
         """Get object as name or alias"""
@@ -217,6 +232,10 @@ class  ObjInfo(object):
         try:
             main = self.alias2name[name]
             return self.objects[main]
+        except KeyError:
+            pass
+        try:
+            return self.sbnames[name]
         except KeyError:
             raise ObjInfoError(name + ' is an unknown name"')
 
@@ -250,7 +269,7 @@ class  ObjInfo(object):
 
     def loadfile(self, filename):
         """Load up a filename"""
-        filename = miscutils.add_suffix(filename, SUFFIX)
+        filename = miscutils.addsuffix(filename, SUFFIX)
         try:
             self.xmldoc, self.xmlroot = xmlutil.load_file(filename, SPI_DOC_ROOT)
             self.filename = filename
@@ -260,6 +279,8 @@ class  ObjInfo(object):
                     ob = ObjData()
                     ob.load(obn)
                     self.objects[ob.objname] = ob
+                    if ob.sbname is not None:
+                        self.sbnames[ob.sbname] = ob
             als = self.xmlroot.find('aliases')
             if als is not None:
                 for aln in als:
@@ -277,7 +298,7 @@ class  ObjInfo(object):
     def savefile(self, filename = None):
         """Save stuff to file"""
         outfile = self.filename
-        if filename is not None: outfile = miscutils.add_suffix(filename, SUFFIX)
+        if filename is not None: outfile = miscutils.addsuffix(filename, SUFFIX)
         if outfile is None:
             raise ObjInfoError("No out file given")
         try:
