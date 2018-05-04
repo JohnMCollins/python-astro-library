@@ -144,11 +144,11 @@ class ObjData(object):
     
     def set_ra(self, **kwargs):
         """Set RA value"""
-        self.rightasc = RaDec(kwargs)
+        self.rightasc = RaDec(**kwargs)
         
     def set_dec(self, **kwargs):
         """Set RA value"""
-        self.decl = RaDec(kwargs)
+        self.decl = RaDec(**kwargs)
         
     def update_ra(self, value = None, err = None, pm = None, datebasis = None):
         """Update RA value"""
@@ -174,7 +174,10 @@ class ObjData(object):
             
 class  ObjInfoError(Exception):
     """Class to report errors concerning ob info files"""
-    pass
+    
+    def __init__(self, message, warningonly = False):
+        super(ObjInfoError, self).__init__(message)
+        self.warningonly = warningonly
 
 class  ObjInfo(object):
     """Details of object"""
@@ -189,7 +192,25 @@ class  ObjInfo(object):
         self.sbnames = dict()
                
     def has_file(self):
+        """Return whether file name assigned"""
         return self.filename is not None
+
+    def is_main(self, name):
+        """Return whether name is a main name rather than alias"""
+        return name in self.objects
+    
+    def is_alias(self, name):
+        """Return whether name is an alias rather than a main name"""
+        return name in self.alias2name
+    
+    def get_aliases(self, nameorobj):
+        """Return aliases for name (or object)"""
+        if type(nameorobj) is ObjData:
+            nameorobj = nameorobj.objname
+        try:
+            return self.name2alias[nameorobj]
+        except KeyError:
+            raise ObjInfoError(nameorobj + " is not a main name")
     
     def add_object(self, obj):
         """Add object to database"""
@@ -293,7 +314,7 @@ class  ObjInfo(object):
                     self.name2alias[alname] = alist
 
         except xmlutil.XMLError as e:
-            raise ObjInfoError(e.args[0])
+            raise ObjInfoError(e.args[0], warningonly=e.warningonly)
     
     def savefile(self, filename = None):
         """Save stuff to file"""

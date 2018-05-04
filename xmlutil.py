@@ -5,7 +5,10 @@ import string
 
 class XMLError(Exception):
     """Throw these errors if we get some value etc error"""
-    pass
+   
+    def __init__(self, message, warningonly = False):
+        super(XMLError, self).__init__(message)
+        self.warningonly = warningonly
 
 def gettext(node):
     """Extract the text child from an XML node"""
@@ -73,6 +76,8 @@ def load_file(filename, rootname = None):
     try:
         doc = ET.parse(filename)
     except IOError as e:
+        if e.args[0] == 2:
+            raise XMLError(message='File not found: ' + filename, warningonly=True)
         raise XMLError("IO error on " + filename + " - " + e.args[1])
     except ET.ParseError as e:
         raise XMLError("Parse error on " + filename + " - " + e.args[0])
