@@ -34,7 +34,7 @@ class RaDec(object):
         self.value = None
         self.err = None
         self.pm = None
-        self.datebasis = None
+        self.datebasis = 'J2000.0'
         for child in node:
             tagn = child.tag
             if tagn == "value":
@@ -203,6 +203,15 @@ class  ObjInfo(object):
         """Return whether name is an alias rather than a main name"""
         return name in self.alias2name
     
+    def get_main(self, mainoralias):
+        """Get the main name for the given name"""
+        if self.is_main(mainoralias):
+            return  mainoralias
+        try:
+            return  self.alias2name[mainoralias]
+        except KeyError:
+            raise ObjInfoError(mainoralias + " is an unknown name")
+    
     def get_aliases(self, nameorobj):
         """Return aliases for name (or object)"""
         if type(nameorobj) is ObjData:
@@ -210,7 +219,7 @@ class  ObjInfo(object):
         try:
             return self.name2alias[nameorobj]
         except KeyError:
-            raise ObjInfoError(nameorobj + " is not a main name")
+            return []
     
     def add_object(self, obj):
         """Add object to database"""
@@ -227,7 +236,7 @@ class  ObjInfo(object):
     
     def del_object(self, obj):
         """Delete object from database"""
-        objn - obj.objname
+        objn = obj.objname
         if objn is None:
             return
         try:
@@ -237,6 +246,7 @@ class  ObjInfo(object):
         for k, v in dict(self.alias2name).items():
             if v == objn:
                 del self.alias2name[k]
+        del self.name2alias[objn]
         if obj.sbname is not None:
             del self.sbnames[obj.sbname]
     
@@ -287,6 +297,19 @@ class  ObjInfo(object):
             self.name2alias[main].remove(alias)
             if len(self.name2alias[main]) == 0:
                 del self.name2alias[main]
+    
+    def list_objects(self):
+        """list objects ordered by RA then DEC"""
+        slist = []
+        for a in self.objects.values():
+            try:
+                ra = a.get_ra()
+                dec = a.get_dec()
+            except ObjDataError:
+                pass
+            slist.append(a)
+        slist.sort(key = lambda x: (x.get_ra(), x.get_dec()))
+        return  slist
 
     def loadfile(self, filename):
         """Load up a filename"""
