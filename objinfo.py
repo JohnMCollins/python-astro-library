@@ -4,7 +4,9 @@ import os.path
 import string
 import re
 import xml.etree.ElementTree as ET
-
+from astropy.time import Time
+import datetime
+import astropy.units as u
 import miscutils
 import xmlutil
 
@@ -12,6 +14,10 @@ SPI_DOC_NAME = "OBJINFO"
 SPI_DOC_ROOT = "objinfo"
 
 SUFFIX = 'objinf'
+
+Time_origin = Time('J2000.0')
+Time_now = Time(datetime.datetime.now())
+Conv_pm = (u.mas/u.yr).to("deg/day")
 
 class  ObjDataError(Exception):
     """Class to report errors concerning individual objects"""
@@ -58,11 +64,18 @@ class RaDec(object):
         if self.datebasis is not None and self.datebasis != 'J2000.0':
             xmlutil.savedata(doc, node, "basis", self.datebasis)
 
-    def getvalue(self):
-        """Get RA or DEC value alone"""
+    def getvalue(self, tfrom = None):
+        """Get RA or DEC value alone, adjusting for pm if set,
+        in which case take time from parameter (datetime object) or now if not given"""
         if self.value is None:
             raise ObjDataError("RA/DEC value not defined")
-        return  self.value
+        if self.pm is None:
+            return  self.value
+        et = Time_now
+        if tfrom is not None:
+            et = Time(tfrom)
+        tdiff = et - Time_origin
+        return self.value + self.pm * Conv_pm * tdiff.jd
         
 class ObjData(object):
     """Decreipt an individaul object"""
@@ -134,13 +147,13 @@ class ObjData(object):
         if self.magerr is not None:
             xmlutil.savedata(doc, node, "magerr", self.magerr)
     
-    def get_ra(self):
+    def get_ra(self, tfrom = None):
         """Get RA value"""
-        return  self.rightasc.getvalue()
+        return  self.rightasc.getvalue(tfrom)
     
-    def get_dec(self):
+    def get_dec(self, tfrom = None):
         """Get DECL value"""
-        return  self.decl.getvalue()
+        return  self.decl.getvalue(tfrom)
     
     def set_ra(self, **kwargs):
         """Set RA value"""
