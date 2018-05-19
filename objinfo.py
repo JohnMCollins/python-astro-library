@@ -311,17 +311,17 @@ class  ObjInfo(object):
             if len(self.name2alias[main]) == 0:
                 del self.name2alias[main]
     
-    def list_objects(self):
+    def list_objects(self, tfrom = None):
         """list objects ordered by RA then DEC"""
         slist = []
         for a in self.objects.values():
             try:
-                ra = a.get_ra()
-                dec = a.get_dec()
+                ra = a.get_ra(tfrom)
+                dec = a.get_dec(tfrom)
             except ObjDataError:
                 pass
             slist.append(a)
-        slist.sort(key = lambda x: (x.get_ra(), x.get_dec()))
+        slist.sort(key = lambda x: (x.get_ra(tfrom), x.get_dec(tfrom)))
         return  slist
 
     def loadfile(self, filename):

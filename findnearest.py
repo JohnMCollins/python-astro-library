@@ -53,7 +53,6 @@ def findnearest(imagedata, spos, apsize = 6, searchrad = 15):
             r2 = x2 + y2
             if r2 > sr2: continue
             adus = np.sum(imagedata[y:y+masksz,x:x+masksz] * mask)
-            print adus
             if adus < maxadus: continue
             if adus == maxadus and r2 >= maxradsq: continue
             maxadus = adus
