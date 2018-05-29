@@ -2,7 +2,7 @@
 
 import numpy as np
 
-def findnearest(imagedata, spos, apsize = 6, searchrad = 15):
+def findnearest(imagedata, spos, apsize = 6, searchrad = 15, minadus = -1):
     """Find nearest object in array nearest to given coordinates
     
     Inputs:
@@ -39,7 +39,7 @@ def findnearest(imagedata, spos, apsize = 6, searchrad = 15):
   
     sr2 = searchrad ** 2
     
-    maxadus = -17
+    maxadus = minadus * np.sum(mask)
     maxradsq = 10000000000
     col_max = -1
     row_max = -1
@@ -60,5 +60,5 @@ def findnearest(imagedata, spos, apsize = 6, searchrad = 15):
             row_max = ycent
             maxradsq = r2
     
-    if maxadus <= 0: return None
+    if col_max <= 0: return None
     return (col_max, row_max, maxadus)
