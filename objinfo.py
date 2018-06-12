@@ -9,11 +9,15 @@ import datetime
 import astropy.units as u
 import miscutils
 import xmlutil
+import numpy as np
+import math
 
 SPI_DOC_NAME = "OBJINFO"
 SPI_DOC_ROOT = "objinfo"
 
 SUFFIX = 'objinf'
+
+DEFAULT_APSIZE = 6
 
 Time_origin = Time('J2000.0')
 Time_now = Time(datetime.datetime.now())
@@ -76,38 +80,171 @@ class RaDec(object):
             et = Time(tfrom)
         tdiff = et - Time_origin
         return self.value + self.pm * Conv_pm * tdiff.jd
+
+class Name_Source(object):
+    """Record name and source"""
+    
+    def __init__(self, objname = None, source = None):
+        self.objname = objname
+        self.source = source
+    
+    def load(self, node):
+        """Load name value from node"""
+        self.objname = xmlutil.gettext(node)
+        try:
+            self.source = node.attrib['source']
+        except KeyError:
+            self.source = None
+    
+    def save(self, doc, pnode, name):
+        """Save mma,e amd source"""
+        node = ET.SubElement(pnode, name)
+        node.text = self.objname
+        if self.source is not None:
+            node.attrib['source'] = self.source
+
+class Mag(object):
+    """Represent a magnitude with filter"""
+    
+    def __init__(self, filter, val = None, err = None):
+        self.value = val
+        self.filter = filter
+        self.err = err
+    
+    def load(self, node):
+        """Load magnitude value from XML node"""
+        self.value = None
+        try:
+            self.filter = node.attrib['filter']
+        except KeyError:
+            raise ObjDataError("Filter missing in mag data")
+        self.err = None
+        for child in node:
+            tagn = child.tag
+            if tagn == "value":
+                self.value = xmlutil.getfloat(child)
+            elif tagn == "err":
+                self.err = xmlutil.getfloat(child)
+    
+    def save(self, doc, pnode, name):
+        """Save magnitude data to file"""
+        node = ET.SubElement(pnode, name)
+        node.attrib['filter'] = self.filter
+        xmlutil.savedata(doc, node, "value", self.value)
+        if self.err is not None:
+            xmlutil.savedata(doc, node, "err", self.err)
+
+class Maglist(object):
+    """Represents a list of magnitudes with various filters"""
+    
+    def __init__(self):
+        self.maglist = dict()
+    
+    def is_def(self):
+        """Return whether any mags defined"""
+        return len(self.maglist) != 0
+    
+    def load(self, node):
+        """Load a list of magnitudes from file"""
+        self.maglist = []
+        for child in node:
+            nxt = Mag()
+            nxt.load(child)
+            self.maglist[nxt.filter] = nxt
+    
+    def save(self, doc, pnode, name):
+        """Save a mag list to file"""
+        node = ET.SubElement(pnode, name)
+        for nxt in self.maglist.values():
+            nxt.save(doc, node, "mag")
+    
+    def get_val(self, filter):
+        """get magnitude for given filter"""
+        try:
+            mg = self.maglist[filter]
+            return (mg.value, mg.err)
+        except KeyError:
+            raise ObjDataError("No magnitude defined for filter " + filter)
+    
+    def set_val(self, filter, value, err = None):
+        """Set mag value"""
+        self.msglist[filter] = Mag(filter, value, err)
+    
+    def av_val(self):
+        """Return average value of magnitude and error as pair"""
+        mags = []
+        errs = []
+        
+        for nxt in self.maglist.values():
+            mgs.append(nxt.value)
+            errs.append(nxt.err)
+        
+        if len(mags) == 0:
+            raise ObjDataError("No magnitudes assigned")
+        
+        m = np.mean(mags)
+        if None in errs:
+            e = None
+        else:
+            e = math.sqrt(np.mean(np.array(errs)**2))
+        return (m, e)
         
 class ObjData(object):
     """Decreipt an individaul object"""
     
-    def __init__(self, objname = None, sbname = None, objtype = None, dist = None, rv = None, ra = None, dec = None, mag = None):
+    def __init__(self, objname = None, objtype = None, dist = None, rv = None, ra = None, dec = None):
         self.objname = objname
-        self.sbname = sbname
+        self.dbnames = dict()
         self.objtype = objtype
         self.dist = dist
         self.rv = rv
         self.rightasc = RaDec(value = ra)
         self.decl = RaDec(value = dec)
-        self.mag = mag
-        self.magerr = None
+        self.apsize = None
+        self.maglist = Maglist()
+    
+    def set_alias(self, alias, source):
+        """Add or update alias name DON'T USE if we are already in an ObjInfo structure"""
+        newalias = Name_Source(alias, source)
+        self.dbnames[alias] = newalias
+    
+    def del_alias(self, alias):
+        """Delete alias name don't worry if not there DON'T USE if we are already in an ObjInfo structure"""
+        try:
+            del self.dbnames[alias]
+        except KeyError:
+            pass
+    
+    def list_aliases(self):
+        """Give a list of aliases"""
+        l = self.dbnames.values()
+        l.sort(key=lambda x: x.objname)
+        return l
+    
+    def list_alias_names(self):
+        """Get a list of alias names without soucrces"""
+        return sorted(self.dbnames.keys())
     
     def load(self, node):
         """Load object data from node"""
         self.objname = None
-        self.sbname = None
+        self.dbnames = dict()
         self.objtype = None
         self.dist = None
         self.rv = None
         self.rightasc = None
         self.decl = None
-        self.mag = None
-        self.magerr = None
+        self.apsize = None
+        self.maglist = Maglist()
         for child in node:
             tagn = child.tag
             if tagn == "name":
                 self.objname = xmlutil.gettext(child)
-            elif tagn == "sbname":
-                self.sbname = xmlutil.gettext(child)
+            elif tagn == "dbnames":
+                for dbc in child:
+                    nxt = Name_Source()
+                    nxt.load(dbc)
+                    self.dbnames[nxt.objname] = nxt
             elif tagn == "type":
                 self.objtype = xmlutil.gettext(child)
             elif tagn == "dist":
@@ -120,18 +257,20 @@ class ObjData(object):
             elif tagn == "decl":
                 self.decl = RaDec()
                 self.decl.load(child)
-            elif tagn == "mag":
-                self.mag = xmlutil.getfloat(child)
-            elif tagn == "magerr":
-                self.magerr = xmlutil.getfloat(child)
+            elif tagn == "apsize":
+                self.apsize = xmlutil.getint(child)
+            elif tagn == "mags":
+                self.maglist.load(child)
     
     def save(self, doc, pnode, name):
         """Save object data tp node"""
         node = ET.SubElement(pnode, name)
         if self.objname is not None:
             xmlutil.savedata(doc, node, "name", self.objname)
-        if self.objname is not None:
-            xmlutil.savedata(doc, node, "sbname", self.sbname)
+        if len(self.dbnames) != 0:
+            dnode = ET.SubElement(node, "dbnames")
+            for dc in self.dbnames.values():
+                dc.save(doc, dnode, "dbname")
         if self.objtype is not None:
             xmlutil.savedata(doc, node, "type", self.objtype)
         if self.dist is not None:
@@ -142,10 +281,10 @@ class ObjData(object):
             self.rightasc.save(doc, node, "ra")
         if self.decl is not None:
             self.decl.save(doc, node, "decl")
-        if self.mag is not None:
-            xmlutil.savedata(doc, node, "mag", self.mag)
-        if self.magerr is not None:
-            xmlutil.savedata(doc, node, "magerr", self.magerr)
+        if self.apsize is not None:
+            xmlutil.savedata(doc, node, "apsize", self.apsize)
+        if self.maglist.is_def():
+            self.maglist.save(doc, node, "maglist")
     
     def get_ra(self, tfrom = None):
         """Get RA value"""
@@ -184,6 +323,26 @@ class ObjData(object):
             self.decl.pm = value
         if datebasis is not None:
             self.decl.datebasis = value
+    
+    def get_aperture(self, defval = DEFAULT_APSIZE):
+        """Retrun aperture size of object or default value"""
+        if self.apsize is None:
+            return defval
+        return self.apsize
+    
+    def set_apsize(self, value):
+        """Set aperture size"""
+        self.apsize = value
+    
+    def get_mag(self, filter = None):
+        """Get magnitude for given filter or average"""
+        if filter is None:
+            return self.maglist.av_val()
+        return self.maglist.get_val(filter)
+    
+    def set_mag(self, filter, value, err = None):
+        """Set magnitude for given filter"""
+        self.maglist.set_val(filter, value, err)            
             
 class  ObjInfoError(Exception):
     """Class to report errors concerning ob info files"""
@@ -201,9 +360,8 @@ class  ObjInfo(object):
         self.xmlroot = None
         self.objects = dict()
         self.alias2name = dict()
-        self.name2alias = dict()
-        self.sbnames = dict()
-               
+        self.allnames = dict()
+        
     def has_file(self):
         """Return whether file name assigned"""
         return self.filename is not None
@@ -227,12 +385,9 @@ class  ObjInfo(object):
     
     def get_aliases(self, nameorobj):
         """Return aliases for name (or object)"""
-        if type(nameorobj) is ObjData:
-            nameorobj = nameorobj.objname
-        try:
-            return self.name2alias[nameorobj]
-        except KeyError:
-            return []
+        if type(nameorobj) is str:
+            nameorobj = self.get_object(nameorobj)
+        return nameorobj.list_aliases()
     
     def add_object(self, obj):
         """Add object to database"""
@@ -241,12 +396,17 @@ class  ObjInfo(object):
             raise ObjInfoError("No name in object to be added")
         if objn in self.objects:
             raise ObjInfoError("Object name " + objn + " clashes with existing object")
-        if objn in self.alias2name:
+        if objn in self.allnames:
             raise ObjInfoError("Object name " + objn + " clashes w)th existing alias")
+        for al in obj.list_alias_names():
+            if al in self.allnames:
+                raise ObjInfoError('Alias for ' + objn + ' of ' + al + ' clashes with exixting name')
         self.objects[objn] = obj
-        if obj.sbname is not None:
-            self.sbnames[obj.sbname] = obj
-    
+        self.allnames[objn] = obj
+        for al in obj.list_alias_names():
+            self.allnames[al] = obj
+            self.alias2name[al] = objn
+
     def del_object(self, obj):
         """Delete object from database"""
         objn = obj.objname
@@ -256,48 +416,35 @@ class  ObjInfo(object):
             del self.objects[objn]
         except KeyError:
             raise ObjInfoError("Object name " + objn + " not found")
-        for k, v in dict(self.alias2name).items():
-            if v == objn:
-                del self.alias2name[k]
-        del self.name2alias[objn]
-        if obj.sbname is not None:
-            del self.sbnames[obj.sbname]
+        for al in obj.list_alias_names():
+            del self.allnames[al]
+            del self.alias2name[al]
     
     def is_defined(self, name):
         """Report whether defined"""
-        return  name in self.objects or name in self.alias2name or name in self.sbnames
+        return  name in self.allnames
     
     def get_object(self, name):
         """Get object as name or alias"""
         try:
-            return self.objects[name]
+            return self.allnames[name]
         except KeyError:
-            pass
-        try:
-            main = self.alias2name[name]
-            return self.objects[main]
-        except KeyError:
-            pass
-        try:
-            return self.sbnames[name]
-        except KeyError:
-            raise ObjInfoError(name + ' is an unknown name"')
+            raise ObjInfoError(name + ' is an unknown name')
 
-    def add_aliases(self, main, *aliases):
+    def add_aliases(self, main, source, *aliases):
         """Add one or more aliases to name"""
-        if main not in self.objects:
+        try:
+            if type(main) is str:
+                main = self.objects[main]
+        except KeyError:
             raise ObjInfoError(main + " is not in the list of objects")
         for alias in aliases:
-            if alias in self.objects:
-                raise ObjInfoError(alias + " is already a main object name")
-            if alias in self.alias2name:
-                raise ObjInfoError(alias + " is already an alias for " + self.alias2name[alias])
+            if alias in self.allnames:
+                raise ObjInfoError(alias + " is already an alias name")
         for alias in aliases:
-            self.alias2name[alias] = main
-            if main in self.name2alias:
-                self.name2alias[main].append(alias)
-            else:
-                self.name2alias[main] = [alias]
+            main.set_alias(alias, source)
+            self.allnames[alias] = main
+            self.alias2name[alias] = main.objname
 
     def del_aliases(self, *aliases):
         """Remove one or more aliases"""
@@ -305,11 +452,10 @@ class  ObjInfo(object):
             if alias not in self.alias2name:
                 raise ObjInfoError(alias + " is not an alias")
         for alias in aliases:
-            main = self.alias2name[alias]
+            mainobj = self.allnames[alias]
+            del self.allnames[alias]
             del self.alias2name[alias]
-            self.name2alias[main].remove(alias)
-            if len(self.name2alias[main]) == 0:
-                del self.name2alias[main]
+            mainobj.del_alias(alias)
     
     def list_objects(self, tfrom = None):
         """list objects ordered by RA then DEC"""
@@ -336,19 +482,10 @@ class  ObjInfo(object):
                     ob = ObjData()
                     ob.load(obn)
                     self.objects[ob.objname] = ob
-                    if ob.sbname is not None:
-                        self.sbnames[ob.sbname] = ob
-            als = self.xmlroot.find('aliases')
-            if als is not None:
-                for aln in als:
-                    alist = []
-                    alname = aln.attrib['name']
-                    for alcn in aln:
-                        afrom = alcn.text
-                        alist.append(afrom)
-                        self.alias2name[afrom] = alname
-                    self.name2alias[alname] = alist
-
+                    self.allnames[ob.objname] = ob
+                    for al in ob.list_alias_names():
+                        self.allnames[al] = ob
+                        self.alias2name[al] = ob.objname
         except xmlutil.XMLError as e:
             raise ObjInfoError(e.args[0], warningonly=e.warningonly)
     
@@ -363,13 +500,6 @@ class  ObjInfo(object):
             obs = ET.SubElement(self.xmlroot, 'objects')
             for obj in self.objects.values():
                 obj.save(self.xmldoc, obs, 'object')
-            als = ET.SubElement(self.xmlroot, "aliases")
-            for alname in self.name2alias:
-                asn = ET.SubElement(als, "alias")
-                asn.attrib['name'] = alname
-                for afrom in self.name2alias[alname]:
-                    af = ET.SubElement(asn, "af")
-                    af.text = afrom
             xmlutil.complete_save(outfile, self.xmldoc)
             self.filename = outfile
         except xmlutil.XMLError as e:
