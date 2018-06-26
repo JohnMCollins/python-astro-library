@@ -70,14 +70,12 @@ class RaDec(object):
 
     def getvalue(self, tfrom = None):
         """Get RA or DEC value alone, adjusting for pm if set,
-        in which case take time from parameter (datetime object) or now if not given"""
+        in which case take time from parameter (datetime object) or base time if not given"""
         if self.value is None:
             raise ObjDataError("RA/DEC value not defined")
-        if self.pm is None:
+        if self.pm is None or tfrom is None:
             return  self.value
-        et = Time_now
-        if tfrom is not None:
-            et = Time(tfrom)
+        et = Time(tfrom)
         tdiff = et - Time_origin
         return self.value + self.pm * Conv_pm * tdiff.jd
 
@@ -166,9 +164,10 @@ class Maglist(object):
         except KeyError:
             raise ObjDataError("No magnitude defined for filter " + filter)
     
-    def set_val(self, filter, value, err = None):
+    def set_val(self, filter, value, err = None, force = True):
         """Set mag value"""
-        self.msglist[filter] = Mag(filter, value, err)
+        if force or filter not in self.maglist:
+            self.maglist[filter] = Mag(filter, value, err)
     
     def av_val(self):
         """Return average value of magnitude and error as pair"""
@@ -340,9 +339,9 @@ class ObjData(object):
             return self.maglist.av_val()
         return self.maglist.get_val(filter)
     
-    def set_mag(self, filter, value, err = None):
+    def set_mag(self, filter, value, err = None, force = True):
         """Set magnitude for given filter"""
-        self.maglist.set_val(filter, value, err)            
+        self.maglist.set_val(filter, value, err, force)            
             
 class  ObjInfoError(Exception):
     """Class to report errors concerning ob info files"""
@@ -458,7 +457,7 @@ class  ObjInfo(object):
             mainobj.del_alias(alias)
     
     def list_objects(self, tfrom = None):
-        """list objects ordered by RA then DEC"""
+        """list objects ordered by RA then DEC as (obj, RA, DEC)"""
         slist = []
         for a in self.objects.values():
             try:
@@ -466,8 +465,8 @@ class  ObjInfo(object):
                 dec = a.get_dec(tfrom)
             except ObjDataError:
                 pass
-            slist.append(a)
-        slist.sort(key = lambda x: (x.get_ra(tfrom), x.get_dec(tfrom)))
+            slist.append((a, ra, dec))
+        slist.sort(key = lambda x: x[1:])
         return  slist
 
     def loadfile(self, filename):
