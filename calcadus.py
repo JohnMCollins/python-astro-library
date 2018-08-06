@@ -6,16 +6,17 @@ class calcaduerror(Exception):
     """Throw this error if we hit the boundaries"""
     pass
 
-def calcadus(imagedata, objpixes, apsize = 6):
+def calcadus(imagedata, errorarray, objpixes, apsize = 6):
     """Calculate ADUs with given aperture radius.
     
     Inputs:
         imagedata - 2d numpy array of imagedatga
+        arrorarray = corresponding errors
         objpixes 0th element column 1st element row
         apsize - pixel radius of search aperture
     
     Outputs:
-        (nadus, count) where count is the count of pixes in circle"""
+        (nadus, error)"""
         
 
     objcol = objpixes[0]
@@ -33,7 +34,8 @@ def calcadus(imagedata, objpixes, apsize = 6):
     xs = ys.transpose()
     r2 = ys + xs
     mask = r2 <= apsize ** 2
+    count = float(np.sum(mask))
     mask = mask.astype(np.float64)
     adus = np.sum(imagedata[objrow-apsize:objrow+apsize+1,objcol-apsize:objcol+apsize+1] * mask)
-    count = np.sum(mask)
-    return (adus, count)
+    errs = np.sum((errorarray[objrow-apsize:objrow+apsize+1,objcol-apsize:objcol+apsize+1] * mask) ** 2)
+    return (adus, errs / count)

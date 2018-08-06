@@ -1,4 +1,10 @@
-# Trim Nan values from edges of array
+# Trim Nan values from trailing edges of array
+
+#################### Warning ###############################
+#                                                          #
+# Do something different if we have to trim from beginning #
+#                                                          #
+############################################################
 
 import numpy as np
 

@@ -25,3 +25,12 @@ class wcscoord(object):
     def coords_to_pix(self, coordlist):
         """Convert coords to pixels adjusting offset"""
         return self.wgcstr.wcs_world2pix(coordlist, 0) - self.offsetpix
+    
+    def abspix(self, pixlist):
+        """Adjust pixels by offsets to give absolute pix coords in original map"""
+        return np.array(pixlist) + self.offsetpix
+
+    def relpix(self, pixlist):
+        """Get relative pixels from absolute ones"""
+        return np.array(pixlist) - self.offsetpix
+
