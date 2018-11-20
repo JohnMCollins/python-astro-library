@@ -36,7 +36,7 @@ class  Remobj(object):
         self.pixrow = pixrow
         self.ra = ra
         self.dec = dec
-        self.apradius - None
+        self.apradius = None
         self.aducount = None
         self.aduerror = None
     
@@ -51,7 +51,7 @@ class  Remobj(object):
         self.pixrow = 0
         self.ra = 0.0
         self.dec = 0.0
-        self.apradius - None
+        self.apradius = None
         self.aducount = None
         self.aduerror = None
         for child in node:
@@ -67,12 +67,11 @@ class  Remobj(object):
             elif tagn == "dec":
                 self.dec = xmlutil.getfloat(child)
             elif tagn == "aprad":
-                xelf.aprad = xmlutil.getint(child)
+                self.aprad = xmlutil.getint(child)
             elif tagn == "adu":
-                xelf.aducount = xmlutil.getfloat(child)
+                self.aducount = xmlutil.getfloat(child)
             elif tagn == "adue":
-                xelf.aduerror = xmlutil.getfloat(child)
-    
+                self.aduerror = xmlutil.getfloat(child)
     
     def save(self, doc, pnode, name):
         """Save object details to node"""
@@ -200,23 +199,27 @@ class  RemobjSet(object):
         """Add obs results to list. forbid updating unless updateok given"""
         if obs in self.obslookup and not updateok:
             raise RemObjError("Already got obs for date %.6f filter %s" % (obs.obsdate, obs.filter))
+        obs.filename = os.path.abspath(obs.filename)
+        obs.set_basedir(os.path.dirname(obs.filename), self.basedir)
         self.obslookup[obs] = obs
     
-    def getobslist(self, filter = None, adjfiles = True, firstdate = None, lastdate = None):
+    def getobslist(self, filter = None, adjfiles = True, firstdate = None, lastdate = None, resultsonly = False):
         """Get a list of observations for processing, in date order.
         If filter specified, restrict to those
         adjust files to be relative to current directory if adjfiles set"""
         oblist = self.obslookup.values()
+        if resultsonly:
+            oblist = [x for x in oblist if x.skylevel is not None]
         if filter is not None:
             oblist = [x for x in oblist if x.filter == filter ]
         if firstdate is not None:
             oblist = [x for x in oblist if x.obsdate >= firstdate ]
         if lastdate is not None:
             oblist = [x for x in oblist if x.obsdate <= lastdate ]
-        sort(oblist, key = lambda x: x.obsdate)
+        oblist.sort(key = lambda x: x.obsdate)
         if adjfiles:
             cwd = os.getcwd()
-            if cwd != solf.basedir:
+            if cwd != self.basedir:
                 for ob in oblist:
                     ob.set_basedir(self.basedir, cwd)
         return oblist

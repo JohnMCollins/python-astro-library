@@ -1,6 +1,7 @@
 # Calculati ADUs with given aperture radius at given coords
 
 import numpy as np
+import math
 
 class calcaduerror(Exception):
     """Throw this error if we hit the boundaries"""
@@ -34,8 +35,7 @@ def calcadus(imagedata, errorarray, objpixes, apsize = 6):
     xs = ys.transpose()
     r2 = ys + xs
     mask = r2 <= apsize ** 2
-    count = float(np.sum(mask))
     mask = mask.astype(np.float64)
     adus = np.sum(imagedata[objrow-apsize:objrow+apsize+1,objcol-apsize:objcol+apsize+1] * mask)
     errs = np.sum((errorarray[objrow-apsize:objrow+apsize+1,objcol-apsize:objcol+apsize+1] * mask) ** 2)
-    return (adus, errs / count)
+    return (adus, math.sqrt(errs))
