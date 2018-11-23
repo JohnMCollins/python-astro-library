@@ -3,7 +3,7 @@
 # @Email:  jmc@toad.me.uk
 # @Filename: dbremfitsobj.py
 # @Last modified by:   jmc
-# @Last modified time: 2018-11-18T10:28:35+00:00
+# @Last modified time: 2018-11-22T12:22:14+00:00
 
 # Routines for database version of remfits finding
 
@@ -61,12 +61,6 @@ class  Remobjlist(object):
             return  int(round(self.obsdate * 1e6))
         except TypeError:
             raise RemObjError("Incomplete observation type")
-
-    def set_basedir(self, olddir, newdir):
-        """Reset filename to be relative to newdir rather than olddir"""
-        if len(self.filename) == 0: return
-        tfile = os.path.join(olddir, self.filename)
-        self.filename = os.path.relpath(tfile, newdir)
 
     def addtarget(self, obj):
         """Set target"""
@@ -144,7 +138,7 @@ class ForB(object):
         self.type = type
         self.filter = filter
         self.fitsind = fitsind
-        self.diff = 0
+        self.diff = diff
 
 def get_nearest_forbinf(dbcurs, year, month):
     """This routine gets information about flat or bias files for the nearest month to that specified
@@ -210,10 +204,10 @@ def del_find_results(dbcurs, obsind, delfound = True, delnotfound = True):
 
     if delfound:
         dbcurs.execute("DELETE FROM identobj WHERE obsind=" + str(obsind))
-        # Remember to delete ADU calcs
+        dbcurs.execute("DELETE FROM aducalc WHERE obsind=" + str(obsind))
     if delnotfound:
         dbcurs.execute("DELETE FROM notfound WHERE obsind=" + str(obsind))
-    dbcurs.commit()
+    dbcurs.connection.commit()
 
 def add_notfound(dbcurs, obsind, target, filter, comment, notcurrf = False, apsize = None, searchrad = None):
     """Add obsind to list of not found objects with reasons."""

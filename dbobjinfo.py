@@ -3,7 +3,7 @@
 # @Email:  jmc@toad.me.uk
 # @Filename: dbobjinfo.py
 # @Last modified by:   jmc
-# @Last modified time: 2018-11-18T15:26:47+00:00
+# @Last modified time: 2018-11-21T20:15:29+00:00
 
 # XML routines for object info database
 
@@ -268,4 +268,15 @@ def get_objlist(dbcurs, ra, dec, radius, when = None):
         adjdec = item.decl.getvalue(when)
         result.append((adjra, adjdec, item))
     result.sort(key=operator.itemgetter(0, 1))
+    return result
+
+def get_object(dbcurs, name):
+    """Get details of object by name"""
+
+    dbcurs.execute("SELECT " + Objdata_fields + " FROM objdata WHERE objname=" + dbcurs.connection.escape(name))
+    rows = dbcurs.fetchall()
+    if len(rows) == 0:
+        return None
+    result = ObjData()
+    result.load_dbrow(rows[0])
     return result
