@@ -3,11 +3,10 @@
 # @Email:  jmc@toad.me.uk
 # @Filename: dbobjinfo.py
 # @Last modified by:   jmc
-# @Last modified time: 2018-11-21T20:15:29+00:00
+# @Last modified time: 2018-12-17T22:48:34+00:00
 
 # XML routines for object info database
 
-import string
 import re
 from astropy.time import Time
 import datetime
@@ -28,7 +27,7 @@ for f in 'giruz':
     for ff in ('mag','merr'):
         Objdata_fields.append(f + ff)
 Objdata_fields.append('apsize')
-Objdata_fields = string.join(Objdata_fields, ',')
+Objdata_fields = ','.join(Objdata_fields)
 
 class  ObjDataError(Exception):
     """Class to report errors concerning individual objects"""
@@ -194,7 +193,7 @@ def conv_when(when = None):
         and tdiff is Timedelta from J2000"""
 
     if when is None:
-        when = Time_now
+        when = Time_nowstring
     elif type(when) == 'float':
         if when >= 2400000.0:
             when = Time(when, format='jd')
