@@ -3,13 +3,12 @@
 # @Email:  jmc@toad.me.uk
 # @Filename: dbremfitsobj.py
 # @Last modified by:   jmc
-# @Last modified time: 2018-11-22T12:22:14+00:00
+# @Last modified time: 2019-01-03T21:06:36+00:00
 
 # Routines for database version of remfits finding
 
 import os
 import os.path
-import string
 import re
 from astropy.time import Time
 from astropy.io import fits
@@ -180,10 +179,10 @@ def get_rem_obs(dbcurs, target, year, month, filter):
     if len(quoted_names) < 2:
         namesel = quoted_names[0]
     else:
-        namesel = "(" + string.join(quoted_names, " OR ") + ")"
+        namesel = "(" + " OR ".join(quoted_names) + ")"
     datesel = "'%.4d-%.2d-01'" % (year, month)
     datesel = "date_obs>=" + datesel + " AND date_obs < DATE_ADD(" + datesel + ",INTERVAL 1 MONTH)"
-    dbcurs.execute("SELECT obsind,ind FROM obsinf WHERE filter=" + dbcurs.connection.escape(filter) + " AND " + datesel + " AND " + namesel + " ORDER BY date_obs")
+    dbcurs.execute("SELECT obsind,ind,exptime FROM obsinf WHERE filter=" + dbcurs.connection.escape(filter) + " AND " + datesel + " AND " + namesel + " ORDER BY date_obs")
     return dbcurs.fetchall()
 
 def get_find_results(dbcurs, obsind):
@@ -209,27 +208,28 @@ def del_find_results(dbcurs, obsind, delfound = True, delnotfound = True):
         dbcurs.execute("DELETE FROM notfound WHERE obsind=" + str(obsind))
     dbcurs.connection.commit()
 
-def add_notfound(dbcurs, obsind, target, filter, comment, notcurrf = False, apsize = None, searchrad = None):
+def add_notfound(dbcurs, obsind, target, filter, exptime, comment, notcurrf = False, apsize = None, searchrad = None):
     """Add obsind to list of not found objects with reasons."""
 
-    nffields = ['obsind', 'target', 'filter', 'comment', 'notcurrflat']
-    nfvalues = [ str(obsind), dbcurs.connection.escape(target), dbcurs.connection.escape(filter), dbcurs.connection.escape(comment), str(notcurrf)]
+    nffields = ['obsind', 'target', 'filter', 'exptime', 'comment', 'notcurrflat']
+    nfvalues = [ str(obsind), dbcurs.connection.escape(target), dbcurs.connection.escape(filter), str(exptime), dbcurs.connection.escape(comment), str(notcurrf)]
     if apsize is not None:
         nffields.append('apsize')
         nfvalues.append(str(apsize))
     if searchrad is not None:
         nffields.append('searchrad')
         nfvalues.append(str(searchrad))
-    dbcurs.execute("INSERT INTO notfound (" + string.join(nffields, ',') + ") VALUES (" + string.join(nfvalues, ',') + ")")
+    dbcurs.execute("INSERT INTO notfound (" + ','.join(nffields) + ") VALUES (" + ','.join(nfvalues) + ")")
     dbcurs.connection.commit()
 
-def add_objident(dbcurs, obsind, target, objname, filter, pixcol, pixrow, radeg, decdeg, apsize, searchrad, notcurrf = False):
+def add_objident(dbcurs, obsind, target, objname, filter, exptime, pixcol, pixrow, radeg, decdeg, apsize, searchrad, notcurrf = False):
     """Add object identification to list of found objects"""
     Fvals = []
     Fvals.append(str(obsind))
     Fvals.append(dbcurs.connection.escape(target))
     Fvals.append(dbcurs.connection.escape(objname))
     Fvals.append(dbcurs.connection.escape(filter))
+    Fvals.append(str(exptime))
     Fvals.append(str(pixcol))
     Fvals.append(str(pixrow))
     Fvals.append(str(radeg))
@@ -237,5 +237,5 @@ def add_objident(dbcurs, obsind, target, objname, filter, pixcol, pixrow, radeg,
     Fvals.append(str(apsize))
     Fvals.append(str(searchrad))
     Fvals.append(str(notcurrf))
-    dbcurs.execute("INSERT INTO identobj (obsind,target,objname,filter,pixcol,pixrow,radeg,decdeg,apsize,searchrad,notcurrflat) VALUES (" + string.join(Fvals, ',') + ")")
+    dbcurs.execute("INSERT INTO identobj (obsind,target,objname,filter,exptime,pixcol,pixrow,radeg,decdeg,apsize,searchrad,notcurrflat) VALUES (" + ','.join(Fvals) + ")")
     dbcurs.connection.commit()

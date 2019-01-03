@@ -1,9 +1,16 @@
+# @Author: John M Collins <jmc>
+# @Date:   2019-01-03T21:01:27+00:00
+# @Email:  jmc@toad.me.uk
+# @Filename: miscutils.py
+# @Last modified by:   jmc
+# @Last modified time: 2019-01-03T22:28:54+00:00
+
 # Misc handy utils
 
 import string
 
 def hassuffix(st, suff = None):
-    """Return whether string (usually file name) has given suffix or any suffix at all"""        
+    """Return whether string (usually file name) has given suffix or any suffix at all"""
     try:
         if suff is None:
             return st.rindex('.') < len(st)
@@ -26,7 +33,7 @@ def removesuffix(st, suff = None):
         if suff != bits[-1]:
             return  st
     bits.pop()
-    return string.join(bits, '.')
+    return '.'.join(bits)
 
 def addsuffix(st, suff):
     """Add a suffix if it hasn't got one"""

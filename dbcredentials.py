@@ -3,8 +3,7 @@
 # @Email:  jmc@toad.me.uk
 # @Filename: dbcredentials.py
 # @Last modified by:   jmc
-# @Last modified time: 2018-12-15T16:40:44+00:00
-
+# @Last modified time: 2018-12-20T23:02:07+00:00
 
 
 # Get DB credentials from standard places

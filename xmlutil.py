@@ -1,3 +1,10 @@
+# @Author: John M Collins <jmc>
+# @Date:   2019-01-03T21:01:27+00:00
+# @Email:  jmc@toad.me.uk
+# @Filename: xmlutil.py
+# @Last modified by:   jmc
+# @Last modified time: 2019-01-03T22:29:14+00:00
+
 # XML Utility functions
 
 import xml.etree.ElementTree as ET
@@ -5,7 +12,7 @@ import string
 
 class XMLError(Exception):
     """Throw these errors if we get some value etc error"""
-   
+
     def __init__(self, message, warningonly = False):
         super(XMLError, self).__init__(message)
         self.warningonly = warningonly
@@ -45,7 +52,7 @@ def savefloatlist(doc, pnode, name, value):
     """Encode a list of floats to an XML file"""
     subnode = ET.SubElement(pnode, name)
     if type(value) != 'float' and type(value) != 'int':
-        subnode.text = string.join(map(lambda x:str(x),value),',')
+        subnode.text = ','.join(map(lambda x:str(x),value))
     else:
         subnode.text = str(value)
     return subnode
@@ -104,4 +111,3 @@ def complete_save(filename, doc):
     finally:
         if fh is not None:
             fh.close()
-

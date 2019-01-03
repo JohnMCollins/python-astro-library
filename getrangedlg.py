@@ -1,3 +1,10 @@
+# @Author: John M Collins <jmc>
+# @Date:   2019-01-03T21:01:27+00:00
+# @Email:  jmc@toad.me.uk
+# @Filename: getrangedlg.py
+# @Last modified by:   jmc
+# @Last modified time: 2019-01-03T22:28:35+00:00
+
 # Manage parameters dialog
 
 from PyQt4.QtCore import *
@@ -69,7 +76,7 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
         for n, fnam in enumerate(flist):
             nbits = string.split(fnam, '.')
             if len(nbits) > 1: nbits.pop()
-            item = QListWidgetItem(string.join(nbits, '.'))
+            item = QListWidgetItem('.'.join(nbits))
             item.setData(Qt.UserRole, QVariant(n))
             self.datafiles.addItem(item)
 

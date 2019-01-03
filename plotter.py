@@ -1,9 +1,14 @@
+# @Author: John M Collins <jmc>
+# @Date:   2019-01-03T21:01:27+00:00
+# @Email:  jmc@toad.me.uk
+# @Filename: plotter.py
+# @Last modified by:   jmc
+# @Last modified time: 2019-01-03T22:29:04+00:00
+
 # Plot functions using GNUplot
 
 import Gnuplot
-import string
 import copy
-
 import datarange
 import xmlutil
 
@@ -110,7 +115,7 @@ class Plotter(object):
                 self.gp("set arrow from %.3f,%.1f to %.3f,%.1f lc rgbcolor '%s' nohead" % (r.upper, self.yrange.lower, r.upper, self.yrange.upper, col))
 
         plotcmds = [ "'%s' w l notitle" % p for p in plotfiles]
-        self.gp("plot " + string.join(plotcmds, ','))
+        self.gp("plot " + ','.join(plotcmds))
         self.active = True
         self.resetreq = False
 
@@ -125,5 +130,4 @@ class Resultplot:
         """Display results filelist assumed in format (filename, starting_time)"""
 
         plotcmds = [ "'%s' w l title '%g'" % x for x in filelist ]
-        self.gp("plot " + string.join(plotcmds, ','))
-
+        self.gp("plot " + ','.join(plotcmds))
