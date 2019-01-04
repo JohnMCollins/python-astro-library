@@ -3,6 +3,7 @@
 import re
 import string
 import numpy
+from functools import reduce
 
 rep = re.compile("\s+")
 
@@ -32,7 +33,7 @@ class Lutdata(object):
         # Get dimensions from first line
 
         try:
-            dims = map(lambda x:int(x), rep.split(string.strip(fin.readline())))
+            dims = [int(x) for x in rep.split(string.strip(fin.readline()))]
         except ValueError:
             raise LUTError("Invalid integer fields in file")
 
@@ -47,7 +48,7 @@ class Lutdata(object):
         # Get data from second line
 
         try:
-            line2 = map(lambda x:float(x), rep.split(string.strip(fin.readline())))
+            line2 = [float(x) for x in rep.split(string.strip(fin.readline()))]
         except ValueError:
             raise LUTError("Invalid float fields in file")
 

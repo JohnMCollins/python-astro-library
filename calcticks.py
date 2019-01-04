@@ -12,9 +12,9 @@ def calcticks(size, mn, mx):
     step = round(step, prec)
     tv = np.arange(mn, mx+step, step)
     if prec <= 0:
-        tvt = map(lambda x: "%d" % round(x), tv)
+        tvt = ["%d" % round(x) for x in tv]
     else:
         fmt = "%%.%df" % prec
-        tvt = map(lambda x: fmt % x, tv)
+        tvt = [fmt % x for x in tv]
     return  (tv, tvt)
 

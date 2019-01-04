@@ -207,7 +207,7 @@ class  RemobjSet(object):
         """Get a list of observations for processing, in date order.
         If filter specified, restrict to those
         adjust files to be relative to current directory if adjfiles set"""
-        oblist = self.obslookup.values()
+        oblist = list(self.obslookup.values())
         if resultsonly:
             oblist = [x for x in oblist if x.skylevel is not None]
         if filter is not None:

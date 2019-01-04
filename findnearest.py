@@ -44,10 +44,10 @@ def findnearest(imagedata, spos, apsize = 6, searchrad = 15, minadus = -1):
     col_max = -1
     row_max = -1
     
-    for y in xrange(minrow,maxrow):
+    for y in range(minrow,maxrow):
         ycent = y + apsize
         y2 = (ycent - srow) ** 2
-        for x in xrange(mincol,maxcol):
+        for x in range(mincol,maxcol):
             xcent = x + apsize
             x2 = (xcent - scol) ** 2
             r2 = x2 + y2

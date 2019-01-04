@@ -91,7 +91,7 @@ class Maglist(object):
         mags = []
         errs = []
 
-        for nxt in self.maglist.values():
+        for nxt in list(self.maglist.values()):
             mgs.append(nxt.value)
             errs.append(nxt.err)
 

@@ -52,11 +52,11 @@ def parserange(arg):
         if len(bits) == 1:
             ret = [0, float(arg)]
         elif len(bits) == 2:
-            ret = map(lambda x: float(x), bits)
+            ret = [float(x) for x in bits]
         else:
             raise ValueError
     except:
-        print "Did not understand range value of", arg
+        print("Did not understand range value of", arg)
         return None
 
     ret.sort()

@@ -32,9 +32,9 @@ def findbrightest(imagedata, apsize = 6):
     col_max = -1
     row_max = -1
     
-    for y in xrange(0,maxrow):
+    for y in range(0,maxrow):
         ycent = y + apsize
-        for x in xrange(0,maxcol):
+        for x in range(0,maxcol):
             xcent = x + apsize
             adus = np.sum(imagedata[y:y+masksz,x:x+masksz] * mask)
             if adus < maxadus: continue

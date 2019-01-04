@@ -3,7 +3,7 @@
 # @Email:  jmc@toad.me.uk
 # @Filename: getrangedlg.py
 # @Last modified by:   jmc
-# @Last modified time: 2019-01-03T22:28:35+00:00
+# @Last modified time: 2019-01-04T12:17:37+00:00
 
 # Manage parameters dialog
 
@@ -121,7 +121,7 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
                 sp = np.loadtxt(sf, unpack=True)
                 wavelengths = sp[self.xcol]
                 amps = sp[self.ycol]
-            except IOError, ValueError:
+            except (IOError, ValueError):
                 continue
             bits = string.split(sf, '.')
             legends.append(bits[0])
@@ -227,7 +227,7 @@ class Getrangedlg(QDialog, ui_getrangedlg.Ui_getrangedlg):
     def on_selectall_clicked(self, b = None):
         if b is None: return
         self.hangon = True
-        for row in xrange(0, self.datafiles.count()):
+        for row in range(0, self.datafiles.count()):
             self.datafiles.item(row).setSelected(True)
         self.hangon = False
         self.updateplot()

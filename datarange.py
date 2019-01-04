@@ -317,7 +317,7 @@ class RangeList(object):
         """Return the range names
 
         NB This isn't sorted"""
-        return self.rlist.keys()
+        return list(self.rlist.keys())
 
     def load(self, node):
         """Load ranges from XML file"""
@@ -330,7 +330,7 @@ class RangeList(object):
     def save(self, doc, pnode, name):
         """Save ranges to XML file"""
         node = ET.SubElement(pnode, name)
-        for n in self.rlist.values():
+        for n in list(self.rlist.values()):
             n.save(doc, node, "rng")
 
 def load_ranges(filename):
@@ -388,7 +388,7 @@ class Rangeset(object):
     def exclude(self, xvalues, *yvalues):
         """Exclude from pairs of xvalues and yvalues the xvalues in any of the ranges given"""
 
-        for r in self.rangeset.values():
+        for r in list(self.rangeset.values()):
             yvalues = r.selectnot(xvalues, *yvalues)
             xvalues = yvalues.pop(0)
         selres = [ xvalues ]
@@ -399,7 +399,7 @@ class Rangeset(object):
         """Include everything that's in any of the ranges"""
 
         rs = np.zeros_like(xvalues, dtype=np.bool)
-        for r in self.rangeset.values():
+        for r in list(self.rangeset.values()):
             rs |= (xvalues >= r.lower) & (xvalues <= r.upper)
         selres = [ xvalues[rs] ]
         for yv in yvalues:

@@ -1,7 +1,7 @@
 # Get details about astro objects from SIMBAD if possible
 
 import pycurl
-from StringIO import StringIO
+from io import StringIO
 import re
 
 rvmatch = re.compile('^V\s*\(km/s\)\s*([-.\d]+)', re.MULTILINE)

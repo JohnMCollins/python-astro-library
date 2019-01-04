@@ -160,7 +160,7 @@ class Maglist(object):
     def save(self, doc, pnode, name):
         """Save a mag list to file"""
         node = ET.SubElement(pnode, name)
-        for nxt in self.maglist.values():
+        for nxt in list(self.maglist.values()):
             nxt.save(doc, node, "mag")
 
     def get_val(self, filter):
@@ -181,7 +181,7 @@ class Maglist(object):
         mags = []
         errs = []
 
-        for nxt in self.maglist.values():
+        for nxt in list(self.maglist.values()):
             mgs.append(nxt.value)
             errs.append(nxt.err)
 
@@ -223,7 +223,7 @@ class ObjData(object):
 
     def list_aliases(self):
         """Give a list of aliases"""
-        l = self.dbnames.values()
+        l = list(self.dbnames.values())
         l.sort(key=lambda x: x.objname)
         return l
 
@@ -275,7 +275,7 @@ class ObjData(object):
             xmlutil.savedata(doc, node, "name", self.objname)
         if len(self.dbnames) != 0:
             dnode = ET.SubElement(node, "dbnames")
-            for dc in self.dbnames.values():
+            for dc in list(self.dbnames.values()):
                 dc.save(doc, dnode, "dbname")
         if self.objtype is not None:
             xmlutil.savedata(doc, node, "type", self.objtype)
@@ -466,7 +466,7 @@ class  ObjInfo(object):
     def list_objects(self, tfrom = None):
         """list objects ordered by RA then DEC as (obj, RA, DEC)"""
         slist = []
-        for a in self.objects.values():
+        for a in list(self.objects.values()):
             try:
                 ra = a.get_ra(tfrom)
                 dec = a.get_dec(tfrom)
@@ -504,7 +504,7 @@ class  ObjInfo(object):
         try:
             self.xmldoc, self.xmlroot = xmlutil.init_save(SPI_DOC_NAME, SPI_DOC_ROOT)
             obs = ET.SubElement(self.xmlroot, 'objects')
-            for obj in self.objects.values():
+            for obj in list(self.objects.values()):
                 obj.save(self.xmldoc, obs, 'object')
             xmlutil.complete_save(outfile, self.xmldoc)
             self.filename = outfile

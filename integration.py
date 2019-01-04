@@ -75,7 +75,7 @@ def integrate(data_array, fromx, tox):
 
     # Note that we do indeed mean "ending_index" here and not "ending_index+1"
 
-    for ind in xrange(starting_index, ending_index):
+    for ind in range(starting_index, ending_index):
         x0, y0 = data_array[ind].getxy()
         x1, y1 = data_array[ind+1].getxy()
         result += (y1 + y0) * (x1 - x0)

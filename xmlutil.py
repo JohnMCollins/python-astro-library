@@ -38,7 +38,7 @@ def getfloat(node):
 def getfloatlist(node):
     """Extract text field from XML node and make a list of floats out of it"""
     try:
-        return map(lambda x:float(x), string.split(node.text, ","))
+        return [float(x) for x in string.split(node.text, ",")]
     except ValueError:
         raise XMLError("Invalid float list for " + node.tag)
 
@@ -52,7 +52,7 @@ def savefloatlist(doc, pnode, name, value):
     """Encode a list of floats to an XML file"""
     subnode = ET.SubElement(pnode, name)
     if type(value) != 'float' and type(value) != 'int':
-        subnode.text = ','.join(map(lambda x:str(x),value))
+        subnode.text = ','.join([str(x) for x in value])
     else:
         subnode.text = str(value)
     return subnode

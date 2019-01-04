@@ -2,6 +2,7 @@
 
 import string
 import math
+from functools import reduce
 
 class RADconvError(Exception):
     pass

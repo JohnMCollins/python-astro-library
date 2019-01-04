@@ -13,7 +13,7 @@ class DOTSError(Exception):
 def _dotsdata(fin, skiplines):
     result = []
     try:
-        dims = map(lambda x:int(x), rep.split(string.strip(fin.readline())))
+        dims = [int(x) for x in rep.split(string.strip(fin.readline()))]
     except ValueError:
         raise DOTSError("Invalid integer fields in file")
 
@@ -28,7 +28,7 @@ def _dotsdata(fin, skiplines):
     for line in fin:
         parts = rep.split(string.strip(line))
         try:
-            parts = map(lambda x:float(x),parts)
+            parts = [float(x) for x in parts]
         except ValueError:
             raise DOTSError("Invalid float value in file")
         result.extend(parts)

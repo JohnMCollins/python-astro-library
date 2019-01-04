@@ -2,6 +2,7 @@
 
 import xmlutil
 import datarange
+from functools import reduce
 
 class Specdatum:
     """This class is used to hold spectral data points with given uncertainty

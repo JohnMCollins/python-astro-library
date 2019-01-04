@@ -42,7 +42,7 @@ class Exclusions(object):
 
     def save(self, fname):
         """Save exclusion list to given file name"""
-        dats = self.exclist.keys()
+        dats = list(self.exclist.keys())
         dats.sort()
         try:
             ef = open(fname, 'w')
@@ -60,14 +60,14 @@ class Exclusions(object):
 
     def places(self):
         """Get places where exclusions occur in order"""
-        ret = self.exclist.keys()
+        ret = list(self.exclist.keys())
         ret.sort()
         return  ret
 
     def inrange(self, minr, maxr):
         """Get a new list in range"""
         ret = Exclusions()
-        for k,v in self.exclist.items():
+        for k,v in list(self.exclist.items()):
             if minr <= k <= maxr:   ret.add(k, v)
         return  ret
 

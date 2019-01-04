@@ -154,7 +154,7 @@ class SpecDataArray(object):
         self.remarks = reason
         try:
             self.listlink.dirty = True
-        except AttributeError, TypeError:
+        except AttributeError as TypeError:
             pass
 
     def is_skipped(self):
@@ -187,7 +187,7 @@ class SpecDataArray(object):
             if netcorrect != 0.0:
                 res = doppler.vec_doppler(res, netcorrect)
 
-        except AttributeError, TypeError:
+        except AttributeError as TypeError:
             raise SpecDataError("Link error missing in " + self.filename)
         return res
 
@@ -460,7 +460,7 @@ class SpecDataList(object):
             except KeyError:
                 occs[f5] = 1
         revoccs = dict()
-        for k,v in occs.items():
+        for k,v in list(occs.items()):
             revoccs[v] = k
         dprefix = revoccs[max(occs.values())]
         if len(occs) == 2 and min(occs.values()) == 1:
@@ -479,7 +479,7 @@ class SpecDataList(object):
         """Get a sorted list of the data files"""
         dprefix, obsf = self.classify_files()
         filelist = glob.glob(self.dirname + '/' + dprefix + '*')
-        filelist = map(lambda x: os.path.basename(x), filelist)
+        filelist = [os.path.basename(x) for x in filelist]
         filelist.sort()
         return  filelist
 
@@ -635,11 +635,11 @@ class SpecDataList(object):
 
     def count_indiv_x(self):
         """Count number of individual scales or offsets in X values"""
-        return len(filter(lambda d: d.hvcorrect != 0.0, self.datalist))
+        return len([d for d in self.datalist if d.hvcorrect != 0.0])
 
     def count_indiv_y(self):
         """Count number of individual scales or offsets in Y values"""
-        return len(filter(lambda d: d.yscale != 1.0 or d.yoffset is not None, self.datalist))
+        return len([d for d in self.datalist if d.yscale != 1.0 or d.yoffset is not None])
 
     def count_markers(self):
         """Count the number discounted"""

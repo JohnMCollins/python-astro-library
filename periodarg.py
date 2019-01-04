@@ -1,3 +1,10 @@
+# @Author: John M Collins <jmc>
+# @Date:   2019-01-03T22:48:34+00:00
+# @Email:  jmc@toad.me.uk
+# @Filename: periodarg.py
+# @Last modified by:   jmc
+# @Last modified time: 2019-01-04T12:32:14+00:00
+
 # Get period from argument
 
 import string
@@ -71,7 +78,5 @@ def optperiodrange(arg):
     try:
         return periodrange(arg)
     except ValueError as e:
-        sys.stdout = sys.stderr
-        print "Invalid period arg", e.args[0]
-        sys.stdout = sys.__stdout__
+        print("Invalid period arg", e.args[0], file=sys.stderr)
         raise

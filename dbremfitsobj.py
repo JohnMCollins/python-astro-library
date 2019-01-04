@@ -96,7 +96,7 @@ class  RemobjSet(object):
         """Get a list of observations for processing, in date order.
         If filter specified, restrict to those
         adjust files to be relative to current directory if adjfiles set"""
-        oblist = self.obslookup.values()
+        oblist = list(self.obslookup.values())
         if resultsonly:
             oblist = [x for x in oblist if x.skylevel is not None]
         if filter is not None:
@@ -175,7 +175,7 @@ def get_rem_obs(dbcurs, target, year, month, filter):
     rows = dbcurs.fetchall()
     for row in rows:
         pndict[row[0]] = 1
-    quoted_names = map(lambda z: "object=" + dbcurs.connection.escape(z), pndict.keys())
+    quoted_names = ["object=" + dbcurs.connection.escape(z) for z in list(pndict.keys())]
     if len(quoted_names) < 2:
         namesel = quoted_names[0]
     else:

@@ -13,13 +13,13 @@ def parsetime(arg):
         raise ValueError("Unknown date format")
     dparts = m.groups()
     if dparts[3] is None:
-        yr, mon, day = map(lambda x: int(x), dparts[0:3])
+        yr, mon, day = [int(x) for x in dparts[0:3]]
         hr = 12
         mn = 0
         sec = 0
         usec = 0
     else:
-        yr, mon, day, hr, mn, sec = map(lambda x: int(x), dparts[0:-1])
+        yr, mon, day, hr, mn, sec = [int(x) for x in dparts[0:-1]]
         if dparts[-1] is None:
             usec = 0
         else:
