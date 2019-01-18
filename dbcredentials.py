@@ -3,8 +3,7 @@
 # @Email:  jmc@toad.me.uk
 # @Filename: dbcredentials.py
 # @Last modified by:   jmc
-# @Last modified time: 2018-12-20T23:02:07+00:00
-
+# @Last modified time: 2019-01-17T10:11:14+00:00
 
 # Get DB credentials from standard places
 
@@ -24,6 +23,26 @@ class DBcredError(Exception):
     pass
 
 class DBcred(object):
+    """Representation of credentials as class"""
+
+    def __init__(self, host = None, database = None, user = None, password = None, login = None, localport = None, remoteport = None):
+        self.host = host
+        self.database = database
+        self.user = user
+        self.password = password
+        self.login = login
+        self.localport = localport
+        self.remoteport = remoteport
+
+    def incomplete(self):
+        """Return if incompletely defined"""
+        if self.host is None or self.database is None or self.user is None or self.password is None:
+            return  True
+        if self.login is not None and self.localport is None:
+            return  True
+        return  False
+
+class DBcredfile(object):
     """This class uses configparser to read and optionally write a "ini" type file
     of database credentials.
     This can be ".dbcred.ini" in the current directory,
@@ -42,20 +61,40 @@ class DBcred(object):
             sect = self.cparser[name]
         except KeyError:
             raise DBcredError("Section " + name + " not known")
-        try:
-            return  (sect.get('host', 'localhost'), sect['database'], sect.get('user', defaultuser), sect['password'])
-        except KeyError as e:
-            raise DBcredError("Section " + name + " not fully defined missing " + e.args[0])
+        ret = DBcred(host = sect.get('host', 'localhost'),
+                    database = sect.get('database'),
+                    user = sect.get('user', defaultuser),
+                    password = sect.get('password'),
+                    login = sect.get('login'),
+                    localport = sect.get('localport'),
+                    remoteport = sect.get('remoteport'))
+        if ret.incomplete():
+            raise DBcredError("Section " + name + " not fully defined")
+        return  ret
+
+    def set_value(self, sect, optn, val):
+        """Routine to impletment setting value in section, if value is False leave unchanged if None delete"""
+
+        if val is None:
+            self.cparser.remove_option(sect, optn)
+        elif val:
+            self.cparser,set(sect, optn, val)
+
+    def set_values(self, sect, creds):
+        """Set values according to credentials"""
+        self.set_value(sect, "host", creds.host)
+        self.set_value(sect, "database", creds.database)
+        self.set_value(sect, "user", creds.user)
+        self.set_value(sect, "password", creds.password)
+        self.set_value(sect, "login", creds.login)
+        self.set_value(sect, "localport", creds.localport)
+        self.set_value(sect, "remoteport", creds.remoteport)
 
     def set_defaults(self, creds):
-        """Set defaults according to list.
-        Items in list are new value or False to leave unchanged NOne to remove"""
+        """Set defaults according to arg
+        Items in arg are new value or False to leave unchanged NOne to remove"""
 
-        for optn, val in zip(('host', 'database', 'user', 'password'), creds):
-            if  val is None:
-                self.cparser.remove_option('DEFAULT', optn)
-            elif val:
-                self.cparser.set('DEFAULT', optn, val)
+        self.set_values("DEFAULT", creds)
 
     def set_creds(self, name, creds):
         """Set crdds for named according to list.
@@ -64,16 +103,11 @@ class DBcred(object):
         if not self.cparser.has_section(name):
             self.cparser.add_section(name)
 
-        for optn, val in zip(('host', 'database', 'user', 'password'), creds):
-            if  val is None:
-                self.cparser.remove_option(name, optn)
-            elif val:
-                self.cparser.set(name, optn, val)
+        self.set_values(name, creds)
 
     def delcreds(self, name):
         """Delete credentials for given DB"""
         self.cparser.remove_section(name)
-
 
     def write(self, filename = "lib"):
         """Write credentials to filename.
