@@ -5,7 +5,7 @@
 # @Last modified by:   jmc
 # @Last modified time: 2018-12-17T22:48:34+00:00
 
-# XML routines for object info database
+# routines for object info database
 
 import re
 from astropy.time import Time
@@ -15,6 +15,7 @@ import miscutils
 import numpy as np
 import math
 import operator
+from networkx.algorithms import tournament
 
 DEFAULT_APSIZE = 6
 
@@ -279,3 +280,14 @@ def get_object(dbcurs, name):
     result = ObjData()
     result.load_dbrow(rows[0])
     return result
+
+def del_object(dbcurs, nameorobj):
+    """Delete object and its aliases from database.
+    Object is given by structure ret or name"""
+    name = nameorobj
+    if type(name) is not str:
+        name = nameorobj._objname
+    qname = dbcurs.connection.escape(name)
+    dbcurs.execute("DELETE FROM objdata WHERE objname=" + qname)
+    dbcurs.execute("DELETE FROM objalias WHERE objname=" + qname)
+
