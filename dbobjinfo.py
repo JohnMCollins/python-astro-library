@@ -15,7 +15,7 @@ import miscutils
 import numpy as np
 import math
 import operator
-from networkx.algorithms import tournament
+#from networkx.algorithms import tournament
 
 DEFAULT_APSIZE = 6
 
@@ -186,6 +186,84 @@ class ObjData(object):
             self.set_mag(filter = f, value = dbrow[ncol], err = dbrow[ncol+1])
             ncol += 2
         self.apsize = dbrow[ncol]
+    
+    def add_object(self, dbcurs):
+        """Add new object to database"""
+    
+        fieldlist = ['objname']
+        fieldvalues = []
+    
+        conn = dbcurs.connection
+    
+        if self.objname is None:
+            raise ObjDataError("Trying to save undefined object")
+    
+        fieldvalues.append(conn.escape(self.objname))
+        if self.objtype is not None:
+            fieldlist.append('objtype')
+            fieldvalues.append(conn.escape(self.objtype))
+        if self.dist is not None:
+            fieldlist.append('dist')
+            fieldvalues.append(str(self.dist))
+        if self.rv is not None:
+            fieldlist.append('rv')
+            fieldvalues.append(str(self.rv))
+        if self.rightasc.value is None:
+            raise ObjDataError("Right assension missing from " + self.objname)
+        else:
+            fieldlist.append('radeg')
+            fieldvalues.append(str(self.rightasc.value))
+            if self.rightasc.err is not None:
+                fieldlist.append('raerr')
+                fieldvalues.append(str(self.rightasc.err))
+            if self.rightasc.pm is not None:
+                fieldlist.append('rapm')
+                fieldvalues.append(str(self.rightasc.pm))
+        if self.decl.value is None:
+            raise ObjDataError("Declinationmissing from " + self.objname)
+        else:
+            fieldlist.append('decdeg')
+            fieldvalues.append(str(self.decl.value))
+            if self.decl.err is not None:
+                fieldlist.append('decrr')
+                fieldvalues.append(str(self.decl.err))
+            if self.decl.pm is not None:
+                fieldlist.append('decpm')
+                fieldvalues.append(str(self.decl.pm))
+        if self.apsize is not None:
+            fieldlist.append('apsize')
+            fieldvalues.append(str(self.apsize))
+        for filt in 'giruz':
+            try:
+                mag, magerr = self.get_mag(filt)
+                if mag is not None:
+                    fieldlist.append(filt + 'mag')
+                    fieldvalues.append(str(mag))
+                    if magerr is not None:
+                        fieldlist.append(filt + 'merr')
+                        fieldvalues.append(str(magerr))
+            except ObjDataError:
+                continue
+        fieldlist = ','.join(fieldlist)
+        fieldvalues = ','.join(fieldvalues)
+        if dbcurs.execute("INSERT INTO  objdata (" + fieldlist + ") VALUES (" + fieldvalues + ")") != 1:
+            raise ObjDataError("Could not insert data to database")
+        
+    def update_filters(self, dbcurs):
+        """update filter values in existing object"""
+
+        setfs = []
+        for filt in 'giruz':
+            try:
+                mag, magerr = self.get_mag(filt)
+                if mag is not None:
+                    setfs.append(filt + 'mag=' + str(mag))
+                    if magerr is not None:
+                        fieldlist.append(filt + 'merr=' + str(magerr))
+            except ObjDataError:
+                continue
+        if len(setfs) != 0:
+            dbcurs.execute("UPDATE objdata SET " + ','.join(setfs) + "WHERE objname=" + dbcurs.connection.escape(self.objname))
 
 # Time conversion routines
 
@@ -194,7 +272,9 @@ def conv_when(when = None):
         and tdiff is Timedelta from J2000"""
 
     if when is None:
-        when = Time_nowstring
+        when = Time_now
+    elif type(when) == datetime.datetime:
+        when = Time(when)
     elif type(when) == 'float':
         if when >= 2400000.0:
             when = Time(when, format='jd')
@@ -228,6 +308,14 @@ def get_targetname(dbcurs, name):
             raise ObjDataError("cannot find any objects with name or alias " + name)
     rows = dbcurs.fetchall()
     return  rows[0][0]
+
+def is_defined(dbcurs,  name):
+    """Report whether given name is defined"""
+    try:
+        get_targetname(dbcurs, name)
+        return True
+    except ObjDataError:
+        return False
 
 # Generate MySQL query to get objects in given location adjusting for PM
 
@@ -276,10 +364,16 @@ def get_object(dbcurs, name):
     dbcurs.execute("SELECT " + Objdata_fields + " FROM objdata WHERE objname=" + dbcurs.connection.escape(name))
     rows = dbcurs.fetchall()
     if len(rows) == 0:
-        return None
+        raise ObjDataError("Could not find object " + name)
     result = ObjData()
     result.load_dbrow(rows[0])
     return result
+
+def add_alias(dbcurs, name, alias, source):
+    """Add a single alias to name"""
+    conn = dbcurs.connection
+    values = [ conn.escape(name), conn.escape(alias), conn.escape(source) ]
+    dbcurs.execute("INSERT INTO objalias (objname,alias,source) VALUES (" + ','.join(values) + ")")
 
 def del_object(dbcurs, nameorobj):
     """Delete object and its aliases from database.
