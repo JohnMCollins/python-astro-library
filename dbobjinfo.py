@@ -15,7 +15,6 @@ import miscutils
 import numpy as np
 import math
 import operator
-#from networkx.algorithms import tournament
 
 DEFAULT_APSIZE = 6
 
@@ -84,8 +83,12 @@ class Maglist(object):
 
     def set_val(self, filter, value, err = None, force = True):
         """Set mag value"""
+        if value is None:
+            return False
         if force or filter not in self.maglist:
             self.maglist[filter] = Mag(filter, value, err)
+            return True
+        return False
 
     def av_val(self):
         """Return average value of magnitude and error as pair"""
@@ -171,7 +174,7 @@ class ObjData(object):
 
     def set_mag(self, filter, value, err = None, force = True):
         """Set magnitude for given filter"""
-        self.maglist.set_val(filter, value, err, force)
+        return self.maglist.set_val(filter, value, err, force)
 
     def load_dbrow(self, dbrow):
         """Load from row of database in order given in Objdata_fields"""
@@ -253,17 +256,17 @@ class ObjData(object):
         """update filter values in existing object"""
 
         setfs = []
-        for filt in 'giruz':
+        for filt in 'giruzHJK':
             try:
                 mag, magerr = self.get_mag(filt)
                 if mag is not None:
                     setfs.append(filt + 'mag=' + str(mag))
                     if magerr is not None:
-                        fieldlist.append(filt + 'merr=' + str(magerr))
+                        setfs.append(filt + 'merr=' + str(magerr))
             except ObjDataError:
                 continue
         if len(setfs) != 0:
-            dbcurs.execute("UPDATE objdata SET " + ','.join(setfs) + "WHERE objname=" + dbcurs.connection.escape(self.objname))
+            dbcurs.execute("UPDATE objdata SET " + ','.join(setfs) + " WHERE objname=" + dbcurs.connection.escape(self.objname))
 
 # Time conversion routines
 
