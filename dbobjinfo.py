@@ -15,6 +15,8 @@ import miscutils
 import numpy as np
 import math
 import operator
+import sys
+from scipy.integrate.odepack import _msgs
 
 DEFAULT_APSIZE = 6
 
@@ -109,6 +111,15 @@ class Maglist(object):
             e = math.sqrt(np.mean(np.array(errs)**2))
         return (m, e)
 
+    def max_val(self):
+        """Get maximum value of magnitude, return 0 if not defined"""
+
+        mags = [m.value for m in self.maglist.values()]
+        try:
+            return min(mags)
+        except ValueError:
+            return  0
+
 class ObjData(object):
     """Decreipt an individaul object"""
 
@@ -172,6 +183,10 @@ class ObjData(object):
             return self.maglist.av_val()
         return self.maglist.get_val(filter)
 
+    def get_maxmag(self):
+        """Get maximum magnitude"""
+        return self.maglist.max_val()
+
     def set_mag(self, filter, value, err = None, force = True):
         """Set magnitude for given filter"""
         return self.maglist.set_val(filter, value, err, force)
@@ -181,7 +196,10 @@ class ObjData(object):
         self.objname = dbrow[0]
         self.objtype = dbrow[1]
         self.dist = dbrow[2]
-        self.rv = dbrow[3]
+        try:
+            self.rv = float(dbrow[3])
+        except ValueError:
+            self.rv = None
         self.update_ra(value = dbrow[4], err = dbrow[5], pm =  dbrow[6])
         self.update_dec(value = dbrow[7], err = dbrow[8], pm  = dbrow[9])
         ncol = 10
@@ -208,7 +226,7 @@ class ObjData(object):
         if self.dist is not None:
             fieldlist.append('dist')
             fieldvalues.append(str(self.dist))
-        if self.rv is not None:
+        if self.rv is not None and self.rv != "--":
             fieldlist.append('rv')
             fieldvalues.append(str(self.rv))
         if self.rightasc.value is None:
@@ -228,7 +246,7 @@ class ObjData(object):
             fieldlist.append('decdeg')
             fieldvalues.append(str(self.decl.value))
             if self.decl.err is not None:
-                fieldlist.append('decrr')
+                fieldlist.append('decerr')
                 fieldvalues.append(str(self.decl.err))
             if self.decl.pm is not None:
                 fieldlist.append('decpm')
@@ -267,6 +285,19 @@ class ObjData(object):
                 continue
         if len(setfs) != 0:
             dbcurs.execute("UPDATE objdata SET " + ','.join(setfs) + " WHERE objname=" + dbcurs.connection.escape(self.objname))
+
+    def get_names(self, dbcurs):
+        """Get all names and alias of the object with the main name first"""
+
+        if self.objname is None:
+            raise ObjDataError("Object not defined yet")
+
+        results = [ self.objname ]
+        dbcurs.execute("SELECT alias FROM objalias WHERE objname=" + dbcurs.connection.escape(self.objname))
+        rtab = dbcurs.fetchall()
+        for r in rtab:
+            results.append(r[0])
+        return  results
 
 # Time conversion routines
 
