@@ -7,8 +7,6 @@
 
 # Misc handy utils
 
-import string
-
 def hassuffix(st, suff = None):
     """Return whether string (usually file name) has given suffix or any suffix at all"""
     try:
@@ -24,7 +22,7 @@ def hassuffix(st, suff = None):
 def removesuffix(st, suff = None):
     """Remove the specified suffix or any suffix if none specified"""
 
-    bits = string.split(st, '.')
+    bits = st.split('.')
     if len(bits) <= 1:
         return  st
     if suff is not None:

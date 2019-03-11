@@ -138,6 +138,7 @@ class ForB(object):
         self.filter = filter
         self.fitsind = fitsind
         self.diff = diff
+        self.fitsimage = None
 
 def get_nearest_forbinf(dbcurs, year, month):
     """This routine gets information about flat or bias files for the nearest month to that specified
