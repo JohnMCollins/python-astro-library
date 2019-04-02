@@ -124,9 +124,24 @@ def getfits(dbcurs, id):
     fout.write(rows[0][0])
     fout.close()
     rows = None
-    ffile = fits.open(tname, memmap=False, lazy_load_hdus=False)
-    os.unlink(tname)
+    try:
+        ffile = fits.open(tname, memmap=False, lazy_load_hdus=False)
+    except OSError:
+        raise
+    finally:
+        os.unlink(tname)
     return ffile
+
+def badfitsfile(dbcurs, fitsind):
+    """Fix references to fitsind in all the places which might refer to them setting
+    refreason and finally deleting files file"""
+    
+    qreason = dbcurs.connection.escape("Corrupt FITS file")
+    qind = "%d" % fitsind
+    dbcurs.execute("UPDATE obsinf SET rejreason=" + qreason + ",ind=0 WHERE ind=" + qind)
+    dbcurs.execute("UPDATE forbinf SET rejreason=" + qreason + ",fitsind=0 WHERE fitsind=" + qind)
+    dbcurs.execute("UPDATE iforbinf SET rejreason=" + qreason + ",ind=0 WHERE ind=" + qind)
+    dbcurs.execute("DELETE FROM fitsfile WHERE ind=" + qind)
 
 class ForB(object):
     """Description of flat or bias file"""
