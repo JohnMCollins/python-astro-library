@@ -198,7 +198,7 @@ class ObjData(object):
         self.dist = dbrow[2]
         try:
             self.rv = float(dbrow[3])
-        except ValueError:
+        except (TypeError, ValueError):
             self.rv = None
         self.update_ra(value = dbrow[4], err = dbrow[5], pm =  dbrow[6])
         self.update_dec(value = dbrow[7], err = dbrow[8], pm  = dbrow[9])

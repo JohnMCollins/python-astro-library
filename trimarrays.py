@@ -37,6 +37,14 @@ def trimto(arr, *arrs):
     
     return tuple(result)
 
+def trimrc(rows, cols, *arrs):
+    """Trim arrays to given number of rows and cols"""
+    
+    result = []
+    for a in arrs:
+        result.append(a[0:rows, 0:cols])
+    return tuple(result)
+    
 def trimzeros(arr):
     
     """Fraim trailing parts of ARRAY WHICH ARE ZEROS"""
