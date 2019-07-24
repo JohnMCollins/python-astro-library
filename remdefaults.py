@@ -16,7 +16,7 @@ def default_database():
         return "cluster"
     except ValueError:
         pass
-    return "remfits"
+    return "cluster"            # Temporary whilst foxy and nacncy are offline
 
 def get_tmpdir():
     """Select an appropriate temporty directory"""
