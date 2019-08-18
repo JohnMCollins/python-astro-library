@@ -101,7 +101,13 @@ def init_save(docname, rootname):
 
 def complete_save(filename, doc):
     """Complete save operation by writing document to filename"""
+    fh = None
     try:
-        doc.write(filename)
+        fh = open(filename, "wb")
+        doc.write(fh)
+        fh.write("\n")
     except IOError as e:
         raise XMLError("IO error on " + filename + " - " + e.args[0])
+    finally:
+        if fh is not None:
+            fh.close()
