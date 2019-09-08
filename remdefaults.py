@@ -7,7 +7,7 @@ def default_database():
     """Get default database depending on what host we are on"""
     
     hostn = os.uname().nodename
-    if hostn == "nacny" or hostn == "foxy" :
+    if hostn == "nancy" or hostn == "foxy" :
         return "remfits"
     if hostn == "uhhpc":
         return "cluster"
