@@ -7,9 +7,11 @@ import xml.etree.ElementTree as ET
 import xmlutil
 import configfile
 
+
 class RemGeomError(Exception):
     """Throw in case of errors"""
     pass
+
 
 class Trims(object):
     """Remember number of pixels to trim from each end of each frame"""
@@ -20,7 +22,26 @@ class Trims(object):
         self.right = 0
         self.top = 0
         self.bottom = 0
+
+    def apply_wcs(self, wcsc):
+        """Set coords according to trims"""
     
+        if wcsc is None:
+            return
+        wcsc.set_offsets(yoffset=self.bottom, xoffset=self.left)
+
+    def apply_image(self, arr):
+        """Apply trims to array"""
+        if self.bottom != 0:
+            arr = arr[self.bottom:]
+        if self.top != 0:
+            arr = arr[0:-self.top]
+        if self.left != 0:
+            arr = arr[:, self.left:]
+        if self.right != 0:
+            arr = arr[:, 0:-self.right]
+        return arr
+
     def load(self, node):
         """Load parameters from XML file"""
         
@@ -51,22 +72,124 @@ class Trims(object):
             xmlutil.savedata(doc, node, "top", self.top)
         if self.bottom != 0:
             xmlutil.savedata(doc, node, "bottom", self.bottom)
-  
-class RemGeom(object):
-    """Represent common parameters for Rem programs"""
-    
+
+
+class Divspec(object):
+    """Preferences for division display"""
+
     def __init__(self):
-        self.trims = Trims()
-        self.width = 10.0
-        self.height = 12.0
-    
+        self.set_defaults()
+
+    def set_defaults(self):
+        """Initialise default values"""
+        self.nocoords = False
+        self.invertim = True
+        self.divisions = 8
+        self.divprec = 3
+        self.divthresh = 15
+        self.racol = "#771111"
+        self.deccol = "#771111"
+        self.divalpha = 0.5
+
     def load(self, node):
         """Load parameters from XML file"""
-        
+
+        self.set_defaults()
+        self.invertim = False
+
+        for child in node:
+            tagn = child.tag
+            if tagn == "nocoords":
+                self.nocoords = True
+            elif tagn == "invertim":
+                self.invertim = True
+            elif tagn == "divisions":
+                self.divisions = xmlutil.getint(child)
+            elif tagn == "divprec":
+                self.divprec = xmlutil.getint(child)
+            elif tagn == "divthresh":
+                self.divthresh = xmlutil.getint(child)
+            elif tagn == "racol":
+                self.racol = xmlutil.gettext(child)
+            elif tagn == "deccol":
+                self.deccol = xmlutil.gettext(child)
+            elif tagn == "divalpha":
+                self.divalpha = xmlutil.getfloat(child)
+
+    def save(self, doc, pnode, name):
+        """Save to xml DOM node"""
+        node = ET.SubElement(pnode, name)
+        if self.nocoords:
+            ET.SubElement(node, "nocoords")
+        if self.invertim:
+            ET.SubElement(node, "invertim")
+        xmlutil.savedata(doc, node, "divisions", self.divisions)
+        xmlutil.savedata(doc, node, "divprec", self.divprec)
+        xmlutil.savedata(doc, node, "divthresh", self.divthresh)
+        xmlutil.savedata(doc, node, "racol", self.racol)
+        xmlutil.savedata(doc, node, "deccol", self.deccol)
+        xmlutil.savedata(doc, node, "divalpha", self.divalpha)
+
+
+class Objdisp(object):
+    """Specify how objects are highlighted"""
+
+    def __init__(self):
+        self.set_defaults()
+
+    def set_defaults(self):
+        """Initialise to default values"""
+        self.objcolour = ["cyan" ]
+        self.objalpha = 1.0
+        self.objtextfs = 12
+        self.objtextdisp = 30
+        self.objfill = False
+
+    def load(self, node):
+        """Load from XML DOM tree"""
+        self.set_defaults()
+        for child in node:
+            tagn = child.tag
+            if tagn == "objcolour":
+                self.objcolour = xmlutil.gettext(child).split(':')
+            elif tagn == "objalpha":
+                self.objalpha = xmlutil.getfloat(child)
+            elif tagn == "objtextfs":
+                self.objtextfs = xmlutil.getint(child)
+            elif tagn == "objtextdisp":
+                self.objtextdisp = xmlutil.getint(child)
+            elif tagn == "objfill":
+                self.objfill = True
+
+    def save(self, doc, pnode, name):
+        """Save to xml DOM node"""
+        node = ET.SubElement(pnode, name)
+        if self.objfill:
+            ET.SubElement(node, "objfill")
+        xmlutil.savedata(doc, node, "objcolour", ":".join(self.objcolour))
+        xmlutil.savedata(doc, node, "objalpha", self.objalpha)
+        xmlutil.savedata(doc, node, "objtextfs", self.objtextfs)
+        xmlutil.savedata(doc, node, "objtextdisp", self.objtextdisp)
+
+
+class RemGeom(object):
+    """Represent common parameters for Rem programs"""
+
+    def __init__(self):
         self.trims = Trims()
+        self.divspec = Divspec()
+        self.objdisp = Objdisp()
         self.width = 10.0
         self.height = 12.0
-        
+
+    def load(self, node):
+        """Load parameters from XML file"""
+
+        self.trims = Trims()
+        self.divspec = Divspec()
+        self.width = 10.0
+        self.height = 12.0
+
         for child in node:
             tagn = child.tag
             if tagn == "trims":
@@ -75,13 +198,29 @@ class RemGeom(object):
                 self.width = xmlutil.getfloat(child)
             elif tagn == "height":
                 self.height = xmlutil.getfloat(child)
-    
+            elif tagn == "divspec":
+                self.divspec.load(child)
+            elif tagn == "objdisp":
+                self.objdisp.load(child)
+
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
         node = ET.SubElement(pnode, name)
         self.trims.save(doc, node, "trims")
         xmlutil.savedata(doc, node, "width", self.width)
         xmlutil.savedata(doc, node, "height", self.height)
+        self.divspec.save(doc, node, "divspec")
+        self.objdisp.save(doc, node, "objdisp")
+
+    def apply_trims(self, wcsc, *arrs):
+        """Trim arrays as specofoed, adjusting wcs coords if needed"""
+
+        self.trims.apply_wcs(wcsc)
+        result = []
+        for a in arrs:
+            result.append(self.trims.apply_image(a))
+        return tuple(result)
+
 
 def load():
     """Load config geom from file"""
@@ -95,9 +234,9 @@ def load():
             ret.load(child)
     return ret
 
+
 def save(rg):
     """Save config to file"""
     (doc, root) = configfile.init_save("REMGEOM")
     rg.save(doc, root, "remg")
     configfile.complete_save(doc, "remgeom")
-
