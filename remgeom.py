@@ -6,6 +6,7 @@ import string
 import xml.etree.ElementTree as ET
 import xmlutil
 import configfile
+import matplotlib.pyplot as plt
 
 
 class RemGeomError(Exception):
@@ -172,6 +173,34 @@ class Objdisp(object):
         xmlutil.savedata(doc, node, "objtextdisp", self.objtextdisp)
 
 
+class Labfmt(object):
+    """Label format stuff for display"""
+
+    def __init__(self):
+        self.set_defaults()
+
+    def set_defaults(self):
+        """Initialise to default values"""
+        self.labsize = 10
+        self.ticksize = 10
+
+    def load(self, node):
+        """Load from XML DOM tree"""
+        self.set_defaults()
+        for child in node:
+            tagn = child.tag
+            if tagn == "labsize":
+                self.labsize = xmlutil.getint(child)
+            elif tagn == "ticksize":
+                self.ticksize = xmlutil.getint(child)
+
+    def save(self, doc, pnode, name):
+        """Save to xml DOM node"""
+        node = ET.SubElement(pnode, name)
+        xmlutil.savedata(doc, node, "labsize", self.labsize)
+        xmlutil.savedata(doc, node, "ticksize", self.ticksize)
+
+
 class RemGeom(object):
     """Represent common parameters for Rem programs"""
 
@@ -179,6 +208,7 @@ class RemGeom(object):
         self.trims = Trims()
         self.divspec = Divspec()
         self.objdisp = Objdisp()
+        self.labfmt = Labfmt()
         self.width = 10.0
         self.height = 12.0
 
@@ -187,6 +217,7 @@ class RemGeom(object):
 
         self.trims = Trims()
         self.divspec = Divspec()
+        self.labfmt = Labfmt()
         self.width = 10.0
         self.height = 12.0
 
@@ -202,6 +233,8 @@ class RemGeom(object):
                 self.divspec.load(child)
             elif tagn == "objdisp":
                 self.objdisp.load(child)
+            elif tagn == "labfmt":
+                self.labfmt.load(child)
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
@@ -211,6 +244,32 @@ class RemGeom(object):
         xmlutil.savedata(doc, node, "height", self.height)
         self.divspec.save(doc, node, "divspec")
         self.objdisp.save(doc, node, "objdisp")
+        self.labfmt.save(doc, node, "labfmt")
+
+    def disp_argparse(self, argp):
+        """Initialise arg parser with display options"""
+        argp.add_argument('--width', type=float, default=self.width, help="Width of figure")
+        argp.add_argument('--height', type=float, default=self.height, help="Height of figure")
+        argp.add_argument('--labsize', type=int, default=self.labfmt.labsize, help='Label and title font size')
+        argp.add_argument('--ticksize', type=int, default=self.labfmt.ticksize, help='Tick font size')
+
+    def disp_getargs(self, resargs):
+        """Get arguments and reset parameters"""
+        try:
+            self.width = resargs['width']
+            self.height = resargs['height']
+            self.labfmt.labsize = resargs['labsize']
+            self.labfmt.ticksize = resargs['ticksize']
+        except KeyError as e:
+            print("Error in parsed arguments", e.args[0], "is missing", file=sys.stderr)
+
+    def plt_figure(self):
+        """Create plot figure and return it. Initialise tick size"""
+        plotfigure = plt.figure(figsize=(self.width, self.height))
+        plt.rc("font", size=self.labfmt.labsize)
+        plt.rc('xtick', labelsize=self.labfmt.ticksize)
+        plt.rc('ytick', labelsize=self.labfmt.ticksize)
+        return plotfigure
 
     def apply_trims(self, wcsc, *arrs):
         """Trim arrays as specofoed, adjusting wcs coords if needed"""
