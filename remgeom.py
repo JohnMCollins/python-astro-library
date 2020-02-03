@@ -173,7 +173,7 @@ class Objdisp(object):
         xmlutil.savedata(doc, node, "objtextdisp", self.objtextdisp)
 
 
-class Labfmt(object):
+class Winfmt(object):
     """Label format stuff for display"""
 
     def __init__(self):
@@ -181,6 +181,8 @@ class Labfmt(object):
 
     def set_defaults(self):
         """Initialise to default values"""
+        self.width = 10.0
+        self.height = 12.0
         self.labsize = 10
         self.ticksize = 10
 
@@ -193,12 +195,18 @@ class Labfmt(object):
                 self.labsize = xmlutil.getint(child)
             elif tagn == "ticksize":
                 self.ticksize = xmlutil.getint(child)
+            elif tagn == "width":
+                self.width = xmlutil.getfloat(child)
+            elif tagn == "height":
+                self.height = xmlutil.getfloat(child)
 
     def save(self, doc, pnode, name):
         """Save to xml DOM node"""
         node = ET.SubElement(pnode, name)
         xmlutil.savedata(doc, node, "labsize", self.labsize)
         xmlutil.savedata(doc, node, "ticksize", self.ticksize)
+        xmlutil.savedata(doc, node, "width", self.width)
+        xmlutil.savedata(doc, node, "height", self.height)
 
 
 class RemGeom(object):
@@ -208,67 +216,84 @@ class RemGeom(object):
         self.trims = Trims()
         self.divspec = Divspec()
         self.objdisp = Objdisp()
-        self.labfmt = Labfmt()
-        self.width = 10.0
-        self.height = 12.0
+        self.defwinfmt = Winfmt()
+        self.altfmts = dict()
 
     def load(self, node):
         """Load parameters from XML file"""
 
         self.trims = Trims()
         self.divspec = Divspec()
-        self.labfmt = Labfmt()
-        self.width = 10.0
-        self.height = 12.0
+        self.defwinfmt = Winfmt()
+        self.altfmts = dict()
 
         for child in node:
             tagn = child.tag
             if tagn == "trims":
                 self.trims.load(child)
-            elif tagn == "width":
-                self.width = xmlutil.getfloat(child)
-            elif tagn == "height":
-                self.height = xmlutil.getfloat(child)
             elif tagn == "divspec":
                 self.divspec.load(child)
             elif tagn == "objdisp":
                 self.objdisp.load(child)
-            elif tagn == "labfmt":
-                self.labfmt.load(child)
+            elif tagn == "labfmt":  # Cope with old version
+                savewidth = self.defwinfmt.width
+                saveheight = self.defwinfmt.height
+                self.defwinfmt.load(child)
+                self.defwinfmt.width = savewidth
+                self.defwinfmt.height = saveheight
+            elif tagn == "defwinfmt":
+                self.defwinfmt.load(child)
+            elif tagn == "altfmts":
+                for gc in child:
+                    newf = Winfmt()
+                    newf.load(gc)
+                    self.altfmts[gc.tag] = newf
+            elif tagn == "width":  # Cope with old version
+                self.defwinfmt.width = xmlutil.getfloat(child)
+            elif tagn == "height":  # Cope with old version
+                self.defwinfmt.height = xmlutil.getfloat(child)
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
         node = ET.SubElement(pnode, name)
         self.trims.save(doc, node, "trims")
-        xmlutil.savedata(doc, node, "width", self.width)
-        xmlutil.savedata(doc, node, "height", self.height)
         self.divspec.save(doc, node, "divspec")
         self.objdisp.save(doc, node, "objdisp")
-        self.labfmt.save(doc, node, "labfmt")
+        self.defwinfmt.save(doc, node, "defwinfmt")
+        if len(self.altfmts) != 0:
+            afn = ET.SubElement(node, "altfmts")
+            for k, v in self.altfmts.items():
+                v.save(doc, afn, k)
 
-    def disp_argparse(self, argp):
+    def disp_argparse(self, argp, fmt=None):
         """Initialise arg parser with display options"""
-        argp.add_argument('--width', type=float, default=self.width, help="Width of figure")
-        argp.add_argument('--height', type=float, default=self.height, help="Height of figure")
-        argp.add_argument('--labsize', type=int, default=self.labfmt.labsize, help='Label and title font size')
-        argp.add_argument('--ticksize', type=int, default=self.labfmt.ticksize, help='Tick font size')
+        which = self.defwinfmt
+        if fmt is not None and fmt in self.altfmts:
+            which = self.altfmts[fmt]
+        argp.add_argument('--width', type=float, default=which.width, help="Width of figure")
+        argp.add_argument('--height', type=float, default=which.height, help="Height of figure")
+        argp.add_argument('--labsize', type=int, default=which.labsize, help='Label and title font size')
+        argp.add_argument('--ticksize', type=int, default=which.ticksize, help='Tick font size')
 
     def disp_getargs(self, resargs):
-        """Get arguments and reset parameters"""
+        """Get arguments and reset parameters
+        
+        BN overwirtes defaults"""
+        
         try:
-            self.width = resargs['width']
-            self.height = resargs['height']
-            self.labfmt.labsize = resargs['labsize']
-            self.labfmt.ticksize = resargs['ticksize']
+            self.defwinfmt.width = resargs['width']
+            self.defwinfmt.height = resargs['height']
+            self.defwinfmt.labsize = resargs['labsize']
+            self.defwinfmt.ticksize = resargs['ticksize']
         except KeyError as e:
             print("Error in parsed arguments", e.args[0], "is missing", file=sys.stderr)
 
     def plt_figure(self):
         """Create plot figure and return it. Initialise tick size"""
-        plotfigure = plt.figure(figsize=(self.width, self.height))
-        plt.rc("font", size=self.labfmt.labsize)
-        plt.rc('xtick', labelsize=self.labfmt.ticksize)
-        plt.rc('ytick', labelsize=self.labfmt.ticksize)
+        plotfigure = plt.figure(figsize=(self.defwinfmt.width, self.defwinfmt.height))
+        plt.rc("font", size=self.defwinfmt.labsize)
+        plt.rc('xtick', labelsize=self.defwinfmt.ticksize)
+        plt.rc('ytick', labelsize=self.defwinfmt.ticksize)
         return plotfigure
 
     def apply_trims(self, wcsc, *arrs):
