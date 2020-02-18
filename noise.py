@@ -22,7 +22,7 @@ def rmsnoise(sig, snr, unorm = 0.0):
     """Add given rms noise to given signal and return result"""
     ls = len(sig)
     nval = nr.uniform(-.5, .5, size = ls) * (1.0 - unorm) + nr.normal(size = ls) * unorm
-    return sig + nval * (rms(sig) / rms(nval)) / snr 
+    return sig + nval * (rms(sig) / rms(nval)) / snr
 
 def getnoise(sig, errs):
     """Calculate SNR from signal and errors"""
@@ -38,7 +38,7 @@ def rms2db(rms):
 
 def db2rms(db):
     """Convert dB SNR to RMS coes with numpy vectors"""
-    try:    
+    try:
         return 10.0 ** (db / 20.0)
     except TypeError:
         return 10.0 ** (np.array(db) / 20.0)

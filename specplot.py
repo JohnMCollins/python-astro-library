@@ -78,4 +78,3 @@ class Specplot(object):
 
         plt.plot(self.wavelengths, self.intensities)
         plt.show()
-

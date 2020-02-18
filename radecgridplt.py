@@ -4,16 +4,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def radecgridplt(w, dat, rg):
-    
+
     """Plot RA/DEC grid on image.
-    
+
         w is a "scscoord" structure
         dat is the immage
         rg is a remgemom structure"""
-    
+
     if rg.divspec.nocoords:
         return
-    
+
     # Get coords of edges of picture
 
     pixrows, pixcols = dat.shape

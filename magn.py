@@ -3,7 +3,7 @@
 import numpy as np
 
 def fluxtomag(inten):
-    """Convert intensity to magnitude""" 
+    """Convert intensity to magnitude"""
     return -2.5 * np.log10(inten)
 
 def magtoflux(mag):

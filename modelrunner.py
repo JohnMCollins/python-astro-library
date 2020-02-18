@@ -53,4 +53,3 @@ class ModelRunner(object):
     def send(self, stuff):
         """Send data to program"""
         os.write(self.proginput, stuff + "\n")
-

@@ -121,4 +121,3 @@ class Plotter(object):
     def savefig(self, pltfile):
         """Save current figure to file name given"""
         plt.gcf().savefig(pltfile)
-

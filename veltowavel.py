@@ -6,4 +6,3 @@ def veltowavel(basewl, velarry):
     """Convert 2nd arg array of velocities to wavelengths"""
     cfn = lambda x: basewl * (1.0 + x/C)
     return cfn(velarry)
-

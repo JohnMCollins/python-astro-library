@@ -16,9 +16,9 @@ class RemGeomError(Exception):
 
 class Trims(object):
     """Remember number of pixels to trim from each end of each frame"""
-    
+
     def __init__(self):
-        
+
         self.left = 0
         self.right = 0
         self.top = 0
@@ -26,7 +26,7 @@ class Trims(object):
 
     def apply_wcs(self, wcsc):
         """Set coords according to trims"""
-    
+
         if wcsc is None:
             return
         wcsc.set_offsets(yoffset=self.bottom, xoffset=self.left)
@@ -45,12 +45,12 @@ class Trims(object):
 
     def load(self, node):
         """Load parameters from XML file"""
-        
+
         self.left = 0
         self.right = 0
         self.top = 0
         self.bottom = 0
-        
+
         for child in node:
             tagn = child.tag
             if tagn == "left":
@@ -61,7 +61,7 @@ class Trims(object):
                 self.top = xmlutil.getint(child)
             elif tagn == "bottom":
                 self.bottom = xmlutil.getint(child)
-    
+
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
         node = ET.SubElement(pnode, name)
@@ -277,9 +277,9 @@ class RemGeom(object):
 
     def disp_getargs(self, resargs):
         """Get arguments and reset parameters
-        
+
         BN overwirtes defaults"""
-        
+
         try:
             self.defwinfmt.width = resargs['width']
             self.defwinfmt.height = resargs['height']

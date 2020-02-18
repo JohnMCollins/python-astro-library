@@ -55,4 +55,3 @@ def dotsdata(f, skiplines=0):
             fin.close()
     else:
         return _dotsdata(f, skiplines)
-

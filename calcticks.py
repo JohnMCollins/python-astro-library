@@ -17,4 +17,3 @@ def calcticks(size, mn, mx):
         fmt = "%%.%df" % prec
         tvt = [fmt % x for x in tv]
     return  (tv, tvt)
-

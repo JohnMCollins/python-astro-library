@@ -135,7 +135,7 @@ def getfits(dbcurs, id):
 def badfitsfile(dbcurs, fitsind):
     """Fix references to fitsind in all the places which might refer to them setting
     refreason and finally deleting files file"""
-    
+
     qreason = dbcurs.connection.escape("Corrupt FITS file")
     qind = "%d" % fitsind
     dbcurs.execute("UPDATE obsinf SET rejreason=" + qreason + ",ind=0 WHERE ind=" + qind)

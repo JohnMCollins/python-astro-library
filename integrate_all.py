@@ -16,4 +16,3 @@ def integrate_all(dir = "", suffix = '.fakespec'):
         spp.loadfile(g)
         results.append(np.trapz(spp.intensities))
     return  results
-

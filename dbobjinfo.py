@@ -207,18 +207,18 @@ class ObjData(object):
             self.set_mag(filter = f, value = dbrow[ncol], err = dbrow[ncol+1])
             ncol += 2
         self.apsize = dbrow[ncol]
-    
+
     def add_object(self, dbcurs):
         """Add new object to database"""
-    
+
         fieldlist = ['objname']
         fieldvalues = []
-    
+
         conn = dbcurs.connection
-    
+
         if self.objname is None:
             raise ObjDataError("Trying to save undefined object")
-    
+
         fieldvalues.append(conn.escape(self.objname))
         if self.objtype is not None:
             fieldlist.append('objtype')
@@ -269,7 +269,7 @@ class ObjData(object):
         fieldvalues = ','.join(fieldvalues)
         if dbcurs.execute("INSERT INTO  objdata (" + fieldlist + ") VALUES (" + fieldvalues + ")") != 1:
             raise ObjDataError("Could not insert data to database")
-        
+
     def update_filters(self, dbcurs):
         """update filter values in existing object"""
 
@@ -418,4 +418,3 @@ def del_object(dbcurs, nameorobj):
     qname = dbcurs.connection.escape(name)
     dbcurs.execute("DELETE FROM objdata WHERE objname=" + qname)
     dbcurs.execute("DELETE FROM objalias WHERE objname=" + qname)
-

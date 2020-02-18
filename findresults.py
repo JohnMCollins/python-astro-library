@@ -12,13 +12,13 @@ class FindResError(Exception):
 
 class FindRes(object):
     """Remember number of pixels to trim from each end of each frame"""
-    
-    def __init__(self):      
+
+    def __init__(self):
         self.reset()
-    
+
     def reset(self):
         """Initialise fields"""
-        
+
         self.name = None
         self.pixrow = None
         self.pixcol = None
@@ -26,12 +26,12 @@ class FindRes(object):
         self.dec = None
         self.apsize = None
         self.aducount = None
-     
+
     def load(self, node):
         """Load fields from XML file"""
-        
+
         self.reset()
-        
+
         for child in node:
             tagn = child.tag
             if tagn == "name":
@@ -48,7 +48,7 @@ class FindRes(object):
                 self.apsize = xmlutil.getint(child)
             elif tagn == "aducount":
                 self.aducount = xmlutil.getfloat(child)
-    
+
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
         node = ET.SubElement(pnode, name)
@@ -66,41 +66,41 @@ class FindRes(object):
             xmlutil.savedata(doc, node, "apsize", self.apsize)
         if self.aducount is not None:
             xmlutil.savedata(doc, node, "aducount", self.aducount)
-  
+
 class FindResSet(object):
     """Represent common parameters for Rem programs"""
-    
+
     def __init__(self, filename = None, obsind = None, fitsind = None):
         self.filename = filename
         self.obsind = obsind
         self.fitsind = fitsind
         self.findlist = []
-    
+
     def add_result(self, res):
         """Add a result to list"""
         self.findlist.append(res)
-    
+
     def del_result(self, res):
         """Remove a result"""
         self.findlist = [l for l in self.findlist if l is not res]
-        
+
     def number_results(self):
         """return number of result"""
         return len(self.findlist)
-    
+
     def get_list(self):
         """Generator to loop over find results"""
         for l in self.findlist:
             yield l
-    
+
     def load(self, node):
         """Load results from XML file"""
-        
+
         self.filename = None
         self.obsind = None
         self.fitsind = None
         self.findlist = []
-        
+
         for child in node:
             tagn = child.tag
             if tagn == "filename":

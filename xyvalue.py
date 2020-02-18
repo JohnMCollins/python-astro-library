@@ -25,4 +25,3 @@ def convert_to_xy(specarray, xcol, ycol):
 def convert_to_matrix(specarray):
     """Reverse conversion above"""
     return [(a.xvalue, a.yvalue) for a in specarray]
-

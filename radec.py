@@ -19,7 +19,7 @@ def ra_hr2deg(ra):
             return  reduce(lambda a, b: a*60.0 + b, [float(c) for c in bits]) / 240.0
         except TypeError:
             raise RADconvError("Invalid RA string " + ra)
-        
+
 
 def ra_deg2hr(ra, asstr = False):
     """Convert RA in degrees to hours or as string if asstr is true"""

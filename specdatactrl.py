@@ -193,7 +193,7 @@ class SpecDataArray(object):
 
     def apply_y_scale_offset(self, yvalues):
         """Apply Y scale and offset settings, used for both Y values and error values"""
-        
+
         # Don't use += or similar below the first time or the whole array will be mangled
         # Apply scaling and offsets - change - now individual was cumulative.
 
@@ -214,14 +214,14 @@ class SpecDataArray(object):
         if scale != 1.0:
             yvalues = yvalues * scale
         return yvalues
-    
+
     def get_raw_yvalues(self):
         """Get unadjusted Y values for comparison with other ways of doing things"""
         res = self.yvalues
         if res is None:
             raise SpecDataError("Data for " + self.filename + " is not loaded")
         return  res
-  
+
     def get_yvalues(self, inclall = True):
         """Get Y values after applying offset and scaling
 
@@ -264,7 +264,7 @@ class SpecDataArray(object):
             res += self.yerror
         else:
             res = self.yerr
-        
+
         if rawvals:
             return res
         return self.apply_y_scale_offset(res)
@@ -508,7 +508,7 @@ class SpecDataList(object):
 
     def parse_yerror(self, field):
         self.yerror = float(field)
-    
+
     def parse_ysnr(self, field):
         self.ysnr = float(field)
 

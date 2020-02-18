@@ -81,4 +81,3 @@ def integrate(data_array, fromx, tox):
         result += (y1 + y0) * (x1 - x0)
 
     return result / 2.0
-

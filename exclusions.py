@@ -77,5 +77,3 @@ class Exclusions(object):
             return self.exclist[val]
         except KeyError:
             return ""
-
-

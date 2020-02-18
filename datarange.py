@@ -101,14 +101,14 @@ class  DataRange(object):
         for yv in yvalues:
             selres.append(yv[sel])
         return selres
-    
+
     def select_triang(self, xvalues, *yvalues):
         """Where xvalues and yvalues are numpy arrays of similar shape,
 
         select the xvalues from the range and the corresponding yvalues
         applying a triangle with base across the range and vertex at centre
         and return the tuple (xvalues, yvalues)"""
-        
+
         sel = (xvalues >= self.lower) & (xvalues <= self.upper)
         xvs = xvalues[sel]
         middle = (self.upper + self.lower) / 2.0
@@ -141,7 +141,7 @@ class  DataRange(object):
 
     def select_interpolate(self, xvalues, yvalues, yerrors = None):
         """Slect xvalues and yvalues from numpy arrays of similar shape
-        
+
         Interpolate points if required at the beginning and end of the range.
         If error array is that put in a mean value for the rror term"""
 

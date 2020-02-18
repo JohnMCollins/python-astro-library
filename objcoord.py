@@ -12,7 +12,7 @@ import string
 def coord2objs(ra, dec, radius=2, extras = False):
     """Get objects within given radius of given ra/dec as decimal degrees.
     If object type given, restrict to that"""
-    
+
     sk = coordinates.SkyCoord(ra=ra, dec=dec, unit=u.deg)
     rad = radius * u.arcmin
     sb = Simbad()
@@ -30,7 +30,7 @@ def coord2objs(ra, dec, radius=2, extras = False):
 
 def obj2coord(obj):
     """Get coordinates of object as (ra, dec) decimals"""
-    
+
     m = re.match('(\d+z\.\d+)\s*([-+]?\d+\.\d+)', obj)
     if m:
         return (float(m.group(1)), float(m.group(2)))

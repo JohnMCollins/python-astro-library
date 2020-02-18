@@ -7,7 +7,8 @@
 
 # Misc handy utils
 
-def hassuffix(st, suff = None):
+
+def hassuffix(st, suff=None):
     """Return whether string (usually file name) has given suffix or any suffix at all"""
     try:
         if suff is None:
@@ -19,19 +20,30 @@ def hassuffix(st, suff = None):
         pass
     return False
 
-def removesuffix(st, suff = None):
-    """Remove the specified suffix or any suffix if none specified"""
 
-    bits = st.split('.')
-    if len(bits) <= 1:
-        return  st
+def removesuffix(st, suff=None, all=False):
+    """Remove the specified suffix or any suffix if none specified
+       If all is true, remove all or all matching suffixes"""
+
+    # Get rid of leading dots in suffice
+
     if suff is not None:
-        while suff[0] == '.':
+        while len(suff) > 0 and suff[0] == '.':
             suff = suff[1:]
-        if suff != bits[-1]:
-            return  st
-    bits.pop()
+        if len(suff) == 0:
+            suff = None
+    bits = st.split('.')
+    if all:
+        while len(bits) > 1:
+            if suff is not None:
+                if suff != bits[-1]:
+                    break
+            bits.pop()
+    elif len(bits) > 1:
+        if suff is None or suff == bits[-1]:
+            bits.pop()
     return '.'.join(bits)
+
 
 def addsuffix(st, suff):
     """Add a suffix if it hasn't got one"""
@@ -41,7 +53,8 @@ def addsuffix(st, suff):
         suff = '.' + suff
     return  st + suff
 
-def replacesuffix(st, new, old = None):
+
+def replacesuffix(st, new, old=None):
     """Replace any suffix with the new one given"""
     try:
         if new[0] != '.':

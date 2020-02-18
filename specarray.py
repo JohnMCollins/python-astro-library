@@ -191,6 +191,3 @@ class Specarraylist(object):
             node.appendChild(dnode)
             for item in self.obs_list:
                 item.save(doc, dnode, "observation")
-
-
-

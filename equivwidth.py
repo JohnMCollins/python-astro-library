@@ -20,17 +20,17 @@ def equivalent_width(range, xvalues, yvalues, interpolate = False, absorb = Fals
 
 def equivalent_width_err(range, xvalues, yvalues, yerrs, interpolate = False, absorb = False):
     """Calculate equivalent width by integration and also error term.
-    
+
     Assumes continuum normalised.
     Args are range (datarange object) and lists of x values, yvalues and yerrs"""
-    
+
     if interpolate:
         selx, sely, yes = range.select_interpolate(xvalues, yvalues, yerrs)
     else:
         selx, sely, yes = range.select(xvalues, yvalues, yerrs)
     wid = max(selx) - min(selx)
     ret = si.trapz(sely, selx) - wid
-    rete = np.sqrt(np.sum(np.square(yes))) * wid 
+    rete = np.sqrt(np.sum(np.square(yes))) * wid
     if absorb:
         return (-ret, rete)
     return  (ret, rete)

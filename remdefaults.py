@@ -5,7 +5,7 @@ import sys
 
 def default_database():
     """Get default database depending on what host we are on"""
-    
+
     try:
         return os.environ["REMDB"]
     except KeyError:

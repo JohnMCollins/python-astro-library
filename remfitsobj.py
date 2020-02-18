@@ -22,14 +22,14 @@ SUFFIX = 'remobj'
 
 class  RemObjError(Exception):
     """Class to report errors"""
-    
+
     def __init__(self, message, warningonly = False):
         super(RemObjError, self).__init__(message)
         self.warningonly = warningonly
 
 class  Remobj(object):
     """Represent remote object found in file"""
-    
+
     def __init__(self, name = "", pixcol=0, pixrow=0, ra=0.0, dec=0.0):
         self.objname = name
         self.pixcol = pixcol
@@ -39,11 +39,11 @@ class  Remobj(object):
         self.apradius = None
         self.aducount = None
         self.aduerror = None
-    
+
     def sortorder(self):
         """Rough and ready way to sort list"""
         return self.ra * 1000.0 + self.dec + 90.0
-    
+
     def load(self, node):
         """Load object details from node"""
         self.objname = ""
@@ -72,7 +72,7 @@ class  Remobj(object):
                 self.aducount = xmlutil.getfloat(child)
             elif tagn == "adue":
                 self.aduerror = xmlutil.getfloat(child)
-    
+
     def save(self, doc, pnode, name):
         """Save object details to node"""
         node = ET.SubElement(pnode, name)
@@ -91,10 +91,10 @@ class  Remobj(object):
             xmlutil.savedata(doc, node, "adu", self.aducount)
         if self.aduerror is not None:
             xmlutil.savedata(doc, node, "adue", self.aduerror)
-    
+
 class  Remobjlist(object):
     """Represent list of above objects"""
-    
+
     def __init__(self, filename = "", obsdate = None, filter = None):
         self.filename = filename
         self.obsdate = obsdate
@@ -104,31 +104,31 @@ class  Remobjlist(object):
         self.airmass = None
         self.skylevel = None
         self.percentile = None
-        
+
     def __hash__(self):
         try:
             return  int(round(self.obsdate * 1e6))
         except TypeError:
             raise RemObjError("Incomplete observation type")
-    
+
     def set_basedir(self, olddir, newdir):
         """Reset filename to be relative to newdir rather than olddir"""
         if len(self.filename) == 0: return
         tfile = os.path.join(olddir, self.filename)
         self.filename = os.path.relpath(tfile, newdir)
-    
+
     def addtarget(self, obj):
         """Set target"""
         oldtarget = self.target
         self.target = obj
         if oldtarget is not None:
             raise RemObjError("Target was already set to " + oldtarget.objname, True)
-    
+
     def addobj(self, obj):
         """Add object to list"""
         self.objlist.append(obj)
         self.objlist.sort(key=lambda x: x.sortorder())
-    
+
     def load(self, node):
         """load object list from node"""
         self.filename = ""
@@ -161,7 +161,7 @@ class  Remobjlist(object):
                 self.skylevel = xmlutil.getfloat(child)
             elif tagn == "percentile":
                 self.percentile = xmlutil.getfloat(child)
-    
+
     def save(self, doc, pnode, name):
         """Save object list to node"""
         node = ET.SubElement(pnode, name)
@@ -186,7 +186,7 @@ class  Remobjlist(object):
 
 class  RemobjSet(object):
     """Class to remember a whole set of obs"""
-    
+
     def __init__(self, targname = None):
         self.filename = None
         self.xmldoc = None
@@ -194,7 +194,7 @@ class  RemobjSet(object):
         self.basedir = os.getcwd()
         self.targname = targname
         self.obslookup = dict()
-    
+
     def addobs(self, obs, updateok = False):
         """Add obs results to list. forbid updating unless updateok given"""
         if obs in self.obslookup and not updateok:
@@ -202,7 +202,7 @@ class  RemobjSet(object):
         obs.filename = os.path.abspath(obs.filename)
         obs.set_basedir(os.path.dirname(obs.filename), self.basedir)
         self.obslookup[obs] = obs
-    
+
     def getobslist(self, filter = None, adjfiles = True, firstdate = None, lastdate = None, resultsonly = False):
         """Get a list of observations for processing, in date order.
         If filter specified, restrict to those
@@ -223,7 +223,7 @@ class  RemobjSet(object):
                 for ob in oblist:
                     ob.set_basedir(self.basedir, cwd)
         return oblist
-    
+
     def set_basedir(self, newdir):
         """Change basdire to new directory"""
         newdir = os.path.abspath(newdir)
@@ -232,7 +232,7 @@ class  RemobjSet(object):
         for ob in self.obslookup:
             ob.set_basedir(self.basedir, newdir)
         self.basedir = newdir
-    
+
     def loadfile(self, filename):
         """Load up a filename"""
         nlookup = dict()
@@ -254,7 +254,7 @@ class  RemobjSet(object):
         except xmlutil.XMLError as e:
             raise RemObjError(e.args[0], warningonly=e.warningonly)
         self.obslookup = nlookup
-    
+
     def savefile(self, filename = None):
         """Save stuff to file"""
         outfile = self.filename
@@ -274,5 +274,3 @@ class  RemobjSet(object):
             self.filename = outfile
         except xmlutil.XMLError as e:
             raise RemObjError("Save file XML error - " + e.args[0])
-    
-    
