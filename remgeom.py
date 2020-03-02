@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 import xmlutil
 import configfile
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 class RemGeomError(Exception):
@@ -209,6 +210,141 @@ class Winfmt(object):
         xmlutil.savedata(doc, node, "height", self.height)
 
 
+def checkdups(lst, name):
+    """Check for duplications in list"""
+    if len(set(lst)) == len(lst):
+        return
+    dups = set([])
+    for n in lst:
+        if lst.count(n) > 1:
+            dups.add(n)
+    dl = [str(n) for n in sorted(list(dups))]
+    raise RemGeomError(name + " has duplicate " + ' '.join(dl))
+
+
+class GrayScale(object):
+    """This represents graycale parameters as either percentiles or standerd devs"""
+
+    def __init__(self):
+        self.name = ""
+        self.isperc = False
+        self.shades = []
+        self.values = []
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other
+
+    def setname(self, name):
+        """Set name careful not to use it after it's been hashed"""
+        self.name = name
+
+    def setscale(self, vals, colours, isperc=False):
+        """Takes a list of values (percentiles or multiples of std dev (could be negative).
+        isperc is True if percentiles - and 100 will be added.
+        colours is list of colours 0 and 255 will be addedd.
+        There should be 1 less colour than values"""
+
+        if len(vals) != len(colours) + 1:
+            raise RemGeomError("values length should be 1 more than colours")
+
+        if min(colours) <= 0 or max(colours) >= 255:
+            raise RemGeomError("Colours should be in range 1 to 254")
+
+        if isperc and (min(vals) <= 0 or max(vals) >= 100):
+            raise RemGeomError("Percentiles should be in range >0 and <100")
+
+        checkdups(colours, "colours")
+        if isperc:
+            checkdups(vals, "percentiles")
+        else:
+            checkdups(vals, "values")
+
+        self.isperc = isperc
+        self.values = vals
+        self.shades = colours
+
+    def disp_colours(self):
+        """Get a list of colours suitable for print out"""
+        return " ".join(["%d" % i for i in sorted(self.shades + [0, 255])])
+
+    def disp_values(self):
+        """Get a list of values suitable for print out"""
+        return " ".join(["%.6g" % i for i in sorted(self.values)])
+
+    def get_colours(self):
+        """Get colours map ready for display"""
+
+        if len(self.shades) == 0:
+            raise RemGeomError("valujes and colours not set up yet")
+
+        clist = sorted(self.shades + [0, 255], reverse=True)
+        return  ["#%.2x%.2x%.2x" % (i, i, i) for i in clist]
+
+    def get_cmap(self, data):
+        """Get divisions as requested from data"""
+
+        if len(self.values) == 0:
+            raise RemGeomError("valujes and colours not set up yet")
+
+        if self.isperc:
+            return  np.percentile(data, sorted(self.values + [0.0, 100.0]))
+
+        mv = data.mean()
+        sv = data.std()
+        va;s = np.array(sorted(self.values)) * sv + mv
+
+        # Limits might be inside range fudge if so
+
+        if data.min() > vals[0]:
+            vals = np.concatenate(((vals[0] * 2 - vals[1],), vals))
+        else:
+            vals = np.concatenate(((data.min(),), vals))
+        if data.max() < vals[-1]:
+            vals = np.concatenate((vals, (vals[-1 * 2 - vals[-2], ])))
+        else:
+            vals = np.concatenate((vals, (data.max(),)))
+        return vals
+
+    def load(self, node):
+        """Load from XML DOM tree"""
+        self.name = ""
+        self.shades = []
+        self.values = []
+
+        n = node.get("name")
+        if n is not None:
+            self.name = str(n)
+        t = node.get("type", "s")
+        self.isperc = len(t) > 0 and t[0] == 'p'
+
+        for child in node:
+            tagn = child.tag
+            if tagn == "shades":
+                for gc in child:
+                    self.shades.append(xmlutil.getint(gc))
+            elif tagn == "values":
+                for gc in child:
+                    self.values.append(xmlutil.getfloat(gc))
+
+    def save(self, doc, pnode, name):
+        """Save to xml DOM node"""
+        if len(self.name) == 0 or len(self.shades) < 2 or len(self.values) < 3:
+            return
+        node = ET.SubElement(pnode, name)
+        node.set("name", self.name)
+        if self.isperc:
+            node.set("type", "percent")
+        cnode = ET.SubElement(node, "shades")
+        for s in self.shades:
+             xmlutil.savedata(doc, cnode, "s", s)
+        cnode = ET.SubElement(node, "values")
+        for v in self.values:
+            xmlutil.savedata(doc, cnode, "v", v)
+
+
 class RemGeom(object):
     """Represent common parameters for Rem programs"""
 
@@ -218,6 +354,7 @@ class RemGeom(object):
         self.objdisp = Objdisp()
         self.defwinfmt = Winfmt()
         self.altfmts = dict()
+        self.shades = dict()
 
     def load(self, node):
         """Load parameters from XML file"""
@@ -226,6 +363,7 @@ class RemGeom(object):
         self.divspec = Divspec()
         self.defwinfmt = Winfmt()
         self.altfmts = dict()
+        self.grayscales = dict()
 
         for child in node:
             tagn = child.tag
@@ -252,6 +390,11 @@ class RemGeom(object):
                 self.defwinfmt.width = xmlutil.getfloat(child)
             elif tagn == "height":  # Cope with old version
                 self.defwinfmt.height = xmlutil.getfloat(child)
+            elif tagn == "grayscales":
+                for gc in child:
+                    gs = GrayScale()
+                    gs.load(gc)
+                    self.grayscales[gs] = gs
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
@@ -264,6 +407,10 @@ class RemGeom(object):
             afn = ET.SubElement(node, "altfmts")
             for k, v in self.altfmts.items():
                 v.save(doc, afn, k)
+        if len(self.grayscales) != 0:
+            gss = ET.SubElement(node, "grayscales")
+            for gs in self.grayscales.values():
+                gs.save(doc, gss, "grayscale")
 
     def disp_argparse(self, argp, fmt=None):
         """Initialise arg parser with display options"""
@@ -274,6 +421,13 @@ class RemGeom(object):
         argp.add_argument('--height', type=float, default=which.height, help="Height of figure")
         argp.add_argument('--labsize', type=int, default=which.labsize, help='Label and title font size')
         argp.add_argument('--ticksize', type=int, default=which.ticksize, help='Tick font size')
+
+    def trim_argparse(self, argp):
+        """Initialise arg parser with trim options"""
+        argp.add_argument('--trimbottom', type=int, default=self.trims.bottom, help='Pixels to trim off bottom of picture')
+        argp.add_argument('--trimleft', type=int, default=self.trims.left, help='Pixels to trim off left of picture')
+        argp.add_argument('--trimright', type=int, default=self.trims.right, help='Pixels to trim off right of picture')
+        argp.add_argument('--trimtop', type=int, default=self.trims.top, help='Pixels to trim off top of picture')
 
     def disp_getargs(self, resargs):
         """Get arguments and reset parameters
@@ -287,6 +441,18 @@ class RemGeom(object):
             self.defwinfmt.ticksize = resargs['ticksize']
         except KeyError as e:
             print("Error in parsed arguments", e.args[0], "is missing", file=sys.stderr)
+            sys.exit(200)
+
+    def trim_getargs(self, resargs):
+        """Get argi,emts fpr tro,s"""
+        try:
+            self.trims.left = resargs['trimleft']
+            self.trims.right = resargs['trimright']
+            self.trims.top = resargs['trimtop']
+            self.trims.bottom = resargs['trimbottom']
+        except KeyError as e:
+            print("Error in parsed arguments", e.args[0], "is missing", file=sys.stderr)
+            sys.exit(200)
 
     def plt_figure(self):
         """Create plot figure and return it. Initialise tick size"""
@@ -304,6 +470,32 @@ class RemGeom(object):
         for a in arrs:
             result.append(self.trims.apply_image(a))
         return tuple(result)
+
+    def list_grayscales(self):
+        """Get a sorted list of gray scales"""
+        return sorted([i.name for i in self.grayscales.values()])
+
+    def get_grayscale(self, name):
+        """Get corresponding gray sacle"""
+        try:
+            return self.grayscales[name]
+        except KeyError:
+            return None
+
+    def del_grayscale(self, name):
+        """Delete gray scale"""
+        try:
+            del self.grayscales[name]
+        except KeyError:
+            pass
+
+    def set_grayscale(self, gs):
+        """Set up grayscale"""
+        if len(gs.name) == 0:
+            raise RemGeomError("No name in gray scale")
+        if len(gs.shades) <= 1 or len(gs.values) <= 2:
+            raise RemGemoError("gray scal not set up in full")
+        self.grayscales[gs] = gs
 
 
 def load():
