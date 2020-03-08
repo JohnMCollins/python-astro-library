@@ -8,6 +8,7 @@ import xmlutil
 import configfile
 import matplotlib.pyplot as plt
 import numpy as np
+import copy
 
 
 class RemGeomError(Exception):
@@ -24,6 +25,8 @@ class Trims(object):
         self.right = 0
         self.top = 0
         self.bottom = 0
+        self.afterblank = False  # True means trim zeros or NaN first
+        self.name = None
 
     def apply_wcs(self, wcsc):
         """Set coords according to trims"""
@@ -51,6 +54,8 @@ class Trims(object):
         self.right = 0
         self.top = 0
         self.bottom = 0
+        self.afterblank = False
+        self.name = node.get("name")
 
         for child in node:
             tagn = child.tag
@@ -62,10 +67,14 @@ class Trims(object):
                 self.top = xmlutil.getint(child)
             elif tagn == "bottom":
                 self.bottom = xmlutil.getint(child)
+            elif tagn == "afterblank":
+                self.afterblank = True
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
         node = ET.SubElement(pnode, name)
+        if self.name:
+            node.set("name", self.name)
         if self.left != 0:
             xmlutil.savedata(doc, node, "left", self.left)
         if self.right != 0:
@@ -74,6 +83,8 @@ class Trims(object):
             xmlutil.savedata(doc, node, "top", self.top)
         if self.bottom != 0:
             xmlutil.savedata(doc, node, "bottom", self.bottom)
+        if self.afterblank:
+            ET.SubElement(node, "afterblank")
 
 
 class Divspec(object):
@@ -225,8 +236,8 @@ def checkdups(lst, name):
 class GrayScale(object):
     """This represents graycale parameters as either percentiles or standerd devs"""
 
-    def __init__(self):
-        self.name = ""
+    def __init__(self, n=""):
+        self.name = n
         self.isperc = False
         self.shades = []
         self.values = []
@@ -235,7 +246,7 @@ class GrayScale(object):
         return hash(self.name)
 
     def __eq__(self, other):
-        return self.name == other
+        return self.name == other.name
 
     def setname(self, name):
         """Set name careful not to use it after it's been hashed"""
@@ -349,7 +360,8 @@ class RemGeom(object):
     """Represent common parameters for Rem programs"""
 
     def __init__(self):
-        self.trims = Trims()
+        self.curtrims = self.deftrims = Trims()
+        self.ftrims = dict()
         self.divspec = Divspec()
         self.objdisp = Objdisp()
         self.defwinfmt = Winfmt()
@@ -359,7 +371,8 @@ class RemGeom(object):
     def load(self, node):
         """Load parameters from XML file"""
 
-        self.trims = Trims()
+        self.curtrims = self.trims = Trims()
+        self.ftrims = dict()
         self.divspec = Divspec()
         self.defwinfmt = Winfmt()
         self.altfmts = dict()
@@ -368,7 +381,13 @@ class RemGeom(object):
         for child in node:
             tagn = child.tag
             if tagn == "trims":
-                self.trims.load(child)
+                self.deftrims.load(child)
+            elif tagn == "ftrim":
+                for gc in child:
+                    ft = Trims()
+                    ft.load(gc)
+                    if ft.name:
+                        self.ftrims[ft.name] = ft
             elif tagn == "divspec":
                 self.divspec.load(child)
             elif tagn == "objdisp":
@@ -399,7 +418,11 @@ class RemGeom(object):
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
         node = ET.SubElement(pnode, name)
-        self.trims.save(doc, node, "trims")
+        self.deftrims.save(doc, node, "trims")
+        if len(self.ftrims) != 0:
+            cnode = ET.SubElement(node, "ftrim")
+            for ft in self.ftrims.values():
+                ft.save(doc, cnode, "trim")
         self.divspec.save(doc, node, "divspec")
         self.objdisp.save(doc, node, "objdisp")
         self.defwinfmt.save(doc, node, "defwinfmt")
@@ -423,12 +446,12 @@ class RemGeom(object):
         argp.add_argument('--ticksize', type=int, default=which.ticksize, help='Tick font size')
         argp.add_argument('--outfig', type=str, help='Output figure prefix if required')
 
-    def trim_argparse(self, argp):
-        """Initialise arg parser with trim options"""
-        argp.add_argument('--trimbottom', type=int, default=self.trims.bottom, help='Pixels to trim off bottom of picture')
-        argp.add_argument('--trimleft', type=int, default=self.trims.left, help='Pixels to trim off left of picture')
-        argp.add_argument('--trimright', type=int, default=self.trims.right, help='Pixels to trim off right of picture')
-        argp.add_argument('--trimtop', type=int, default=self.trims.top, help='Pixels to trim off top of picture')
+#     def trim_argparse(self, argp):
+#         """Initialise arg parser with trim options"""
+#         argp.add_argument('--trimbottom', type=int, default=self.trims.bottom, help='Pixels to trim off bottom of picture')
+#         argp.add_argument('--trimleft', type=int, default=self.trims.left, help='Pixels to trim off left of picture')
+#         argp.add_argument('--trimright', type=int, default=self.trims.right, help='Pixels to trim off right of picture')
+#         argp.add_argument('--trimtop', type=int, default=self.trims.top, help='Pixels to trim off top of picture')
 
     def disp_getargs(self, resargs):
         """Get arguments and reset parameters
@@ -447,16 +470,16 @@ class RemGeom(object):
 
         return outfig
 
-    def trim_getargs(self, resargs):
-        """Get argi,emts fpr tro,s"""
-        try:
-            self.trims.left = resargs['trimleft']
-            self.trims.right = resargs['trimright']
-            self.trims.top = resargs['trimtop']
-            self.trims.bottom = resargs['trimbottom']
-        except KeyError as e:
-            print("Error in parsed arguments", e.args[0], "is missing", file=sys.stderr)
-            sys.exit(200)
+#     def trim_getargs(self, resargs):
+#         """Get argi,emts fpr tro,s"""
+#         try:
+#             self.trims.left = resargs['trimleft']
+#             self.trims.right = resargs['trimright']
+#             self.trims.top = resargs['trimtop']
+#             self.trims.bottom = resargs['trimbottom']
+#         except KeyError as e:
+#             print("Error in parsed arguments", e.args[0], "is missing", file=sys.stderr)
+#             sys.exit(200)
 
     def plt_figure(self):
         """Create plot figure and return it. Initialise tick size"""
@@ -466,13 +489,25 @@ class RemGeom(object):
         plt.rc('ytick', labelsize=self.defwinfmt.ticksize)
         return plotfigure
 
+    def select_trim(self, filt=None, create=False):
+        """Select the appropriate trim for the filter and return whether we trim Nan/Zero first"""
+        self.curtrims = self.deftrims
+        if filt is not None:
+            try:
+                self.curtrims = self.ftrims[filt]
+            except KeyError:
+                if create:
+                    self.curtrims = self.ftrims[filt] = copy.copy(self.deftrims)
+                    self.curtrims.name = filt
+        return self.curtrims.afterblank
+
     def apply_trims(self, wcsc, *arrs):
         """Trim arrays as specofoed, adjusting wcs coords if needed"""
 
-        self.trims.apply_wcs(wcsc)
+        self.curtrims.apply_wcs(wcsc)
         result = []
         for a in arrs:
-            result.append(self.trims.apply_image(a))
+            result.append(self.curtrims.apply_image(a))
         return tuple(result)
 
     def list_grayscales(self):
@@ -482,7 +517,7 @@ class RemGeom(object):
     def get_grayscale(self, name):
         """Get corresponding gray sacle"""
         try:
-            return self.grayscales[name]
+            return self.grayscales[GrayScale(name)]
         except KeyError:
             return None
 
