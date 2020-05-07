@@ -33,3 +33,46 @@ def parsetime(arg, atend=False):
         yr = day
         day = t
     return  datetime.datetime(yr, mon, day, hr, mn, sec, usec)
+
+
+def parsedate(dat):
+    """Parse an argument date and try to interpret common things"""
+    if dat is None:
+        return None
+    now = datetime.datetime.now()
+    rnow = datetime.datetime(now.year, now.month, now.day)
+    m = re.match("(\d+)\D(\d+)(?:\D(\d+))?", dat)
+    try:
+        if m:
+            dy, mn, yr = m.groups()
+            dy = int(dy)
+            mn = int(mn)
+            if yr is None:
+                yr = now.year
+                ret = datetime.datetime(yr, mn, dy)
+                if ret > rnow:
+                    ret = datetime.datetime(yr - 1, mn, dy)
+            else:
+                yr = int(yr)
+                if dy > 31:
+                    yr = dy
+                    dy = int(m.group(3))
+                if yr < 50:
+                    yr += 2000
+                elif yr < 100:
+                    yr += 1900
+                ret = datetime.datetime(yr, mn, dy)
+        elif dat == 'today':
+            ret = rnow
+        elif dat == 'yesterday':
+            ret = rnow - datetime.timedelta(days=1)
+        else:
+            m = re.match("t-(\d+)$", dat)
+            if m:
+                ret = rnow - datetime.timedelta(days=int(m.group(1)))
+            else:
+                raise ValueError("Could not understand date: " + dat)
+    except ValueError:
+        raise ValueError("Could not understand date: " + dat)
+
+    return ret.strftime("%Y-%m-%d")

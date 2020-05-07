@@ -133,7 +133,7 @@ def complete_save(filename, doc):
         doc.write(fh, encoding='utf8', method='xml')
         fh.write("\n".encode())
     except IOError as e:
-        raise XMLError("IO error on " + filename + " - " + e.args[0])
+        raise XMLError("IO error on " + filename + " - " + e.strerror)
     finally:
         if fh is not None:
             fh.close()
