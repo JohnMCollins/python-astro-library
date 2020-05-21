@@ -418,6 +418,10 @@ class RemGeom(object):
         self.shades = dict()
         self.greyscales = dict()
 
+    def list_altfmts(self):
+        """Get a list of alternative formats"""
+        return sorted(self.altfmts.keys())
+
     def load(self, node):
         """Load parameters from XML file"""
 

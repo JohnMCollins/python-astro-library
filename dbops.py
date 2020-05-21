@@ -13,16 +13,25 @@ import os
 import sys
 import time
 
+
 class dbopsError(Exception):
     pass
+
 
 def opendb(name):
     """Open the database with the name given"""
 
-    dbc = dbcredentials.DBcredfile()
-    creds = dbc.get(name)
+    try:
+        dbc = dbcredentials.DBcredfile()
+        creds = dbc.get(name)
+    except dbcredentials.DBcredError as e:
+        raise dbopsError(e.args[0])
+
     if creds.login is None:
-        return  pymysql.connect(host=creds.host, user=creds.user, passwd=creds.password, db=creds.database)
+        try:
+            return  pymysql.connect(host=creds.host, user=creds.user, passwd=creds.password, db=creds.database)
+        except pymysql.OperationalError as e:
+            raise dbopsError("Could  not connect to database error was " + e.args[1])
 
     # We need SSH tunnel, first see if we've got one already
 
