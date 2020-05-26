@@ -17,18 +17,21 @@ import astropy.units as u
 import numpy as np
 import math
 import random
+import remdefaults
+
 
 class  RemObjError(Exception):
     """Class to report errors"""
 
-    def __init__(self, message, warningonly = False):
+    def __init__(self, message, warningonly=False):
         super(RemObjError, self).__init__(message)
         self.warningonly = warningonly
+
 
 class  Remobj(object):
     """Represent remote object found in file"""
 
-    def __init__(self, name = "", pixcol=0, pixrow=0, ra=0.0, dec=0.0):
+    def __init__(self, name="", pixcol=0, pixrow=0, ra=0.0, dec=0.0):
         self.objname = name
         self.pixcol = pixcol
         self.pixrow = pixrow
@@ -42,10 +45,11 @@ class  Remobj(object):
         """Rough and ready way to sort list"""
         return self.ra * 1000.0 + self.dec + 90.0
 
+
 class  Remobjlist(object):
     """Represent list of above objects"""
 
-    def __init__(self, filename = "", obsdate = None, filter = None):
+    def __init__(self, filename="", obsdate=None, filter=None):
         self.filename = filename
         self.obsdate = obsdate
         self.filter = filter
@@ -73,10 +77,11 @@ class  Remobjlist(object):
         self.objlist.append(obj)
         self.objlist.sort(key=lambda x: x.sortorder())
 
+
 class  RemobjSet(object):
     """Class to remember a whole set of obs"""
 
-    def __init__(self, targname = None):
+    def __init__(self, targname=None):
         self.filename = None
         self.xmldoc = None
         self.xmlroot = None
@@ -84,7 +89,7 @@ class  RemobjSet(object):
         self.targname = targname
         self.obslookup = dict()
 
-    def addobs(self, obs, updateok = False):
+    def addobs(self, obs, updateok=False):
         """Add obs results to list. forbid updating unless updateok given"""
         if obs in self.obslookup and not updateok:
             raise RemObjError("Already got obs for date %.6f filter %s" % (obs.obsdate, obs.filter))
@@ -92,7 +97,7 @@ class  RemobjSet(object):
         obs.set_basedir(os.path.dirname(obs.filename), self.basedir)
         self.obslookup[obs] = obs
 
-    def getobslist(self, filter = None, adjfiles = True, firstdate = None, lastdate = None, resultsonly = False):
+    def getobslist(self, filter=None, adjfiles=True, firstdate=None, lastdate=None, resultsonly=False):
         """Get a list of observations for processing, in date order.
         If filter specified, restrict to those
         adjust files to be relative to current directory if adjfiles set"""
@@ -105,7 +110,7 @@ class  RemobjSet(object):
             oblist = [x for x in oblist if x.obsdate >= firstdate ]
         if lastdate is not None:
             oblist = [x for x in oblist if x.obsdate <= lastdate ]
-        oblist.sort(key = lambda x: x.obsdate)
+        oblist.sort(key=lambda x: x.obsdate)
         if adjfiles:
             cwd = os.getcwd()
             if cwd != self.basedir:
@@ -113,13 +118,14 @@ class  RemobjSet(object):
                     ob.set_basedir(self.basedir, cwd)
         return oblist
 
+
 def getfits(dbcurs, id):
     """Fetch FITS.gz file of given ID from database"""
     dbcurs.execute("SELECT fitsgz FROM fitsfile WHERE ind=" + str(id))
     rows = dbcurs.fetchall()
     if len(rows) == 0:
         raise RemObjError("Cannot find fits file id " + str(id))
-    tname = "tmpfits-%.9d.gz" % random.randint(0,999999999)
+    tname = remdefaults.tempfile("tmpfits-%.9d.gz" % random.randint(0, 999999999))
     fout = open(tname, 'wb')
     fout.write(rows[0][0])
     fout.close()
@@ -132,6 +138,7 @@ def getfits(dbcurs, id):
         os.unlink(tname)
     return ffile
 
+
 def badfitsfile(dbcurs, fitsind):
     """Fix references to fitsind in all the places which might refer to them setting
     refreason and finally deleting files file"""
@@ -143,10 +150,11 @@ def badfitsfile(dbcurs, fitsind):
     dbcurs.execute("UPDATE iforbinf SET rejreason=" + qreason + ",ind=0 WHERE ind=" + qind)
     dbcurs.execute("DELETE FROM fitsfile WHERE ind=" + qind)
 
+
 class ForB(object):
     """Description of flat or bias file"""
 
-    def __init__(self, year, month, type, filter, fitsind, diff = 0):
+    def __init__(self, year, month, type, filter, fitsind, diff=0):
         self.year = year
         self.month = month
         self.type = type
@@ -155,12 +163,13 @@ class ForB(object):
         self.diff = diff
         self.fitsimage = None
 
+
 def get_nearest_forbinf(dbcurs, year, month):
     """This routine gets information about flat or bias files for the nearest month to that specified
 
     return (flat dict, bias dict)"""
     ym = year * 12 + month
-    dbcurs.execute("SELECT year,month,typ,filter,fitsind,ABS(CONVERT(year,SIGNED)*12 + CONVERT(month, SIGNED)-"+str(ym)+") AS diff FROM forbinf ORDER BY diff,typ,filter LIMIT 16")
+    dbcurs.execute("SELECT year,month,typ,filter,fitsind,ABS(CONVERT(year,SIGNED)*12 + CONVERT(month, SIGNED)-" + str(ym) + ") AS diff FROM forbinf ORDER BY diff,typ,filter LIMIT 16")
     rows = dbcurs.fetchall()
     fdict = dict()
     bdict = dict()
@@ -176,6 +185,7 @@ def get_nearest_forbinf(dbcurs, year, month):
     if len(bdict) != 4:
         raise RemObjError("Could not read complete bias table for year " + str(year) + " month " + str(month))
     return (fdict, bdict)
+
 
 def get_rem_obs(dbcurs, target, year, month, filter):
     """Get a list of REM observations of given target name for given year, month and filterself.
@@ -201,6 +211,7 @@ def get_rem_obs(dbcurs, target, year, month, filter):
     dbcurs.execute("SELECT obsind,ind,exptime FROM obsinf WHERE filter=" + dbcurs.connection.escape(filter) + " AND " + datesel + " AND " + namesel + " ORDER BY date_obs")
     return dbcurs.fetchall()
 
+
 def get_find_results(dbcurs, obsind):
     """See if we did this before.
 
@@ -214,7 +225,8 @@ def get_find_results(dbcurs, obsind):
     nok = rows[0][0]
     return (ok, nok)
 
-def del_find_results(dbcurs, obsind, delfound = True, delnotfound = True):
+
+def del_find_results(dbcurs, obsind, delfound=True, delnotfound=True):
     """Delete previous observations for obsind"""
 
     if delfound:
@@ -224,7 +236,8 @@ def del_find_results(dbcurs, obsind, delfound = True, delnotfound = True):
         dbcurs.execute("DELETE FROM notfound WHERE obsind=" + str(obsind))
     dbcurs.connection.commit()
 
-def add_notfound(dbcurs, obsind, target, filter, exptime, comment, notcurrf = False, apsize = None, searchrad = None):
+
+def add_notfound(dbcurs, obsind, target, filter, exptime, comment, notcurrf=False, apsize=None, searchrad=None):
     """Add obsind to list of not found objects with reasons."""
 
     nffields = ['obsind', 'target', 'filter', 'exptime', 'comment', 'notcurrflat']
@@ -238,7 +251,8 @@ def add_notfound(dbcurs, obsind, target, filter, exptime, comment, notcurrf = Fa
     dbcurs.execute("INSERT INTO notfound (" + ','.join(nffields) + ") VALUES (" + ','.join(nfvalues) + ")")
     dbcurs.connection.commit()
 
-def add_objident(dbcurs, obsind, target, objname, filter, exptime, pixcol, pixrow, radeg, decdeg, apsize, searchrad, notcurrf = False):
+
+def add_objident(dbcurs, obsind, target, objname, filter, exptime, pixcol, pixrow, radeg, decdeg, apsize, searchrad, notcurrf=False):
     """Add object identification to list of found objects"""
     Fvals = []
     Fvals.append(str(obsind))
