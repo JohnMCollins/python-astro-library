@@ -4,6 +4,9 @@ import datetime
 import re
 
 parset = re.compile('(\d+).(\d+).(\d+)(?:\D+(\d+).(\d+).(\d+)(\.\d+)?)?$')
+pallm = re.compile('(\d\d\d\d)-(\d+)$')
+pdat = re.compile("(\d+)\D(\d+)(?:\D(\d+))?")
+poff = re.compile("t-(\d+)$")
 
 
 def parsetime(arg, atend=False):
@@ -41,7 +44,7 @@ def parsedate(dat):
         return None
     now = datetime.datetime.now()
     rnow = datetime.datetime(now.year, now.month, now.day)
-    m = re.match("(\d+)\D(\d+)(?:\D(\d+))?", dat)
+    m = pdat.match(dat)
     try:
         if m:
             dy, mn, yr = m.groups()
@@ -67,7 +70,7 @@ def parsedate(dat):
         elif dat == 'yesterday':
             ret = rnow - datetime.timedelta(days=1)
         else:
-            m = re.match("t-(\d+)$", dat)
+            m = poff.match(dat)
             if m:
                 ret = rnow - datetime.timedelta(days=int(m.group(1)))
             else:
@@ -76,3 +79,62 @@ def parsedate(dat):
         raise ValueError("Could not understand date: " + dat)
 
     return ret.strftime("%Y-%m-%d")
+
+
+def parsedaterange(fieldselect, daterange=None, allmonth=None, datefield='date_obs'):
+    """Parse date range or all month specification and set up part of a MySQL field select
+    statement into array "fieldselect" (assuming to be joined later by AND).
+    Date range can be given in the "daterange" argument as date1:date2 or :date2 or date1:
+    or in the allmonth argument as yyyy-mm. Field in datebase can be specified usuually date_obs
+    Return a suitable date string or none"""
+
+    dstring = None
+
+    if allmonth is not None:
+        mtch = pallm.match(allmonth)
+        if mtch is None:
+            raise ValueError("Cannot understand allmonth arg " + allmonth + "expecting yyyy-mm")
+        smonth = allmonth + "-01"
+        fieldselect.append("date(" + datefield + ")>='" + smonth + "'")
+        fieldselect.append("date(" + datefield + ")<=date_sub(date_add('" + smonth + "',interval 1 month),interval 1 day)")
+        dstring = "all month " + allmonth
+    elif daterange is not None:
+        datesp = daterange.split(':')
+        # NB might get ValueError form parsedate, let it happen
+        if len(datesp) == 1:
+            fieldselect.append("date(" + datefield + ")='" + parsedate(daterange) + "'")
+            dstring = daterange
+        elif len(datesp) != 2:
+            raise ValueError("Don't understand whate date " + daterange + " is supposed to be")
+        else:
+            fd, td = datesp
+            dstring = ""
+            if len(fd) != 0:
+                fieldselect.append("date(" + datefield + ")>='" + parsedate(fd) + "'")
+                dstring = fd
+            if len(td) != 0:
+                fieldselect.append("date(" + datefield + ")<='" + parsedate(td) + "'")
+                if len(fd) != 0:
+                    dstring += " "
+                dstring += "up to " + td
+            elif len(fd) != 0:
+                dstring += " onwards"
+            else:
+                dstring = "All dates"
+
+    # Don't do anything if neither specified.
+    return dstring
+
+
+def parseargs_daterange(argp):
+    """Parse arguments relevant to date range parsing"""
+    argp.add_argument('--nodates', action='store_true', help='Include all files without regard to dates')
+    argp.add_argument('--dates', type=str, help='From:to dates', default='1/1/2017:')
+    argp.add_argument('--allmonth', type=str, help='All of given year-month as alternative to from/to date')
+
+
+def getargs_daterange(resargs, fieldselect, datefield='date_obs'):
+    """Fetch and apply aruguments relevant to date range parsing NB might give ValueError"""
+    if not resargs['nodates']:
+        return parsedaterange(fieldselect, daterange=resargs['dates'], allmonth=resargs['allmonth'], datefield=datefield)
+    return None

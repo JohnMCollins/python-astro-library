@@ -16,8 +16,7 @@ import datetime
 import astropy.units as u
 import numpy as np
 import math
-import random
-import remdefaults
+import fitsops
 
 
 class  RemObjError(Exception):
@@ -125,17 +124,9 @@ def getfits(dbcurs, id):
     rows = dbcurs.fetchall()
     if len(rows) == 0:
         raise RemObjError("Cannot find fits file id " + str(id))
-    tname = remdefaults.tempfile("tmpfits-%.9d.gz" % random.randint(0, 999999999))
-    fout = open(tname, 'wb')
-    fout.write(rows[0][0])
-    fout.close()
-    rows = None
-    try:
-        ffile = fits.open(tname, memmap=False, lazy_load_hdus=False)
-    except OSError:
-        raise
-    finally:
-        os.unlink(tname)
+    ffile = fitsops.mem_open(rows[0][0])
+    if ffile is None:
+        raise RemObjError("Problem with FITS format for id " + str(id))
     return ffile
 
 

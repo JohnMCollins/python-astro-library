@@ -271,12 +271,6 @@ class greyscale(object):
         self.shades = []
         self.values = []
 
-    def __hash__(self):
-        return hash(self.name)
-
-    def __eq__(self, other):
-        return self.name == other
-
     def setname(self, name):
         """Set name careful not to use it after it's been hashed"""
         self.name = name
@@ -332,7 +326,7 @@ class greyscale(object):
             raise RemGeomError("valujes and colours not set up yet")
 
         if self.isfixed:
-            return  sorted(self.values + [data.min(), data.max])
+            return  sorted(self.values + [data.min(), data.max()])
 
         if self.isperc:
             return  np.percentile(data, sorted(self.values + [0.0, 100.0]))
@@ -390,10 +384,10 @@ class greyscale(object):
             return
         node = ET.SubElement(pnode, name)
         node.set("name", self.name)
-        if self.isperc:
-            node.set("type", "percent")
-        elif self.isfixed:
+        if self.isfixed:
             node.set("type", "fixed")
+        elif self.isperc:
+            node.set("type", "percent")
         if self.inverse:
             node.set("inverse", "y")
         cnode = ET.SubElement(node, "shades")
@@ -474,7 +468,7 @@ class RemGeom(object):
                 for gc in child:
                     gs = greyscale()
                     gs.load(gc)
-                    self.greyscales[gs] = gs
+                    self.greyscales[gs.name] = gs
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
@@ -594,7 +588,7 @@ class RemGeom(object):
     def get_greyscale(self, name):
         """Get corresponding gray sacle"""
         try:
-            return self.greyscales[greyscale(name)]
+            return self.greyscales[name]
         except KeyError:
             return None
 
@@ -609,9 +603,9 @@ class RemGeom(object):
         """Set up greyscale"""
         if len(gs.name) == 0:
             raise RemGeomError("No name in gray scale")
-        if len(gs.shades) <= 1 or len(gs.values) <= 2:
-            raise RemGemoError("gray scal not set up in full")
-        self.greyscales[gs] = gs
+        if len(gs.shades) < 1 or len(gs.values) < 2:
+            raise RemGeomError("gray scale not set up in full " + str(len(gs.shades)) + " shades " + str(len(gs.values)) + " values")
+        self.greyscales[gs.name] = gs
 
 
 def load(fname=None, mustexist=False):

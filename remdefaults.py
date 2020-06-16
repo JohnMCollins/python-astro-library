@@ -7,6 +7,7 @@ import dbops
 
 my_database = None
 my_tempdir = None
+my_libdir = None
 
 
 def default_database():
@@ -37,18 +38,31 @@ def get_tmpdir():
         return  os.getcwd()
 
 
+def get_libdir():
+    """Select an appropriate library directory"""
+    try:
+        return os.environ["REMLIB"]
+    except KeyError:
+        ldir = os.path.expanduser("~/lib")
+        if os.path.exists(ldir):
+            return ldir
+        return os.path.expanduser("~")
+
+
 def parseargs(argp):
     """Parse arguments relevant to REM defaults"""
     argp.add_argument('--database', type=str, default=default_database(), help='Database to use')
     argp.add_argument('--tempdir', type=str, default=get_tmpdir(), help='Temp directory to unload files')
+    argp.add_argument('--libdir', type=str, default=get_libdir(), help='REM library to use')
 
 
 def getargs(resargs):
     """Get supplied arguments and apply"""
-    global my_database, my_tempdir
+    global my_database, my_tempdir, my_libdir
 
     my_database = resargs['database']
     my_tempdir = resargs['tempdir']
+    my_libdir = resargs['libdir']
 
 
 def opendb():
@@ -67,3 +81,11 @@ def tempfile(name):
     if my_tempdir is None:
         return name
     return os.path.join(my_tempdir, name)
+
+
+def libfile(name):
+    """Construct library file path using defaults or other setting"""
+    global my_libdir
+    if my_libdir is None:
+        my_libdir = get_libdir()
+    return os.path.join(my_libdir, name)
