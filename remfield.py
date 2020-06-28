@@ -1,7 +1,7 @@
 # Arg parsing for selecting obs or daily flat/bias
 
 
-class RemFieldError:
+class RemFieldError(Exception):
     """Throw this to indicate error in pair parse"""
     pass
 

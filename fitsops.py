@@ -30,3 +30,15 @@ def mem_get(bytestring, compressed=True):
     data = ff[0].data
     ff.close()
     return (hdr, data)
+
+
+def mem_makefits(hdr, data, compressed=True):
+    """Generate new FITS file in memory from header and date"""
+    hdu = fits.PrimaryHDU(data, hdr)
+    mm = io.BytesIO()
+    hdu.writeto(mm)
+    stream = mm.getvalue()
+    bytestring = stream
+    if compressed:
+        bytestring = gzip.compress(stream)
+    return bytestring

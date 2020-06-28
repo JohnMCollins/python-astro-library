@@ -8,6 +8,7 @@ import dbops
 my_database = None
 my_tempdir = None
 my_libdir = None
+my_inlib = True
 
 
 def default_database():
@@ -49,20 +50,36 @@ def get_libdir():
         return os.path.expanduser("~")
 
 
-def parseargs(argp):
+def parseargs(argp, inlib=True, libdir=True, tempdir=True, database=True):
     """Parse arguments relevant to REM defaults"""
-    argp.add_argument('--database', type=str, default=default_database(), help='Database to use')
-    argp.add_argument('--tempdir', type=str, default=get_tmpdir(), help='Temp directory to unload files')
-    argp.add_argument('--libdir', type=str, default=get_libdir(), help='REM library to use')
+    if database:
+        argp.add_argument('--database', type=str, default=default_database(), help='Database to use')
+    if tempdir:
+        argp.add_argument('--tempdir', type=str, default=get_tmpdir(), help='Temp directory to unload files')
+    if libdir:
+        argp.add_argument('--libdir', type=str, default=get_libdir(), help='REM library to use')
+        act = 'store_true'
+        if inlib:
+            act = 'store_false'
+        argp.add_argument('--inlib', action=act, help='Load and store in library return than CWD by default')
 
 
 def getargs(resargs):
     """Get supplied arguments and apply"""
-    global my_database, my_tempdir, my_libdir
-
-    my_database = resargs['database']
-    my_tempdir = resargs['tempdir']
-    my_libdir = resargs['libdir']
+    global my_database, my_tempdir, my_libdir, my_inlib
+    try:
+        my_database = resargs['database']
+    except KeyError:
+        pass
+    try:
+        my_tempdir = resargs['tempdir']
+    except KeyError:
+        pass
+    try:
+        my_libdir = resargs['libdir']
+        my_inlib = resargs['inlib']
+    except KeyError:
+        pass
 
 
 def opendb():
@@ -85,7 +102,9 @@ def tempfile(name):
 
 def libfile(name):
     """Construct library file path using defaults or other setting"""
-    global my_libdir
+    global my_libdir, my_inlib
+    if not my_inlib:
+        return name
     if my_libdir is None:
         my_libdir = get_libdir()
     return os.path.join(my_libdir, name)
