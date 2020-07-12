@@ -14,7 +14,7 @@ class RemFitsHdrErr(Exception):
 class RemFitsHdr(object):
     """Get bits we want from header"""
 
-    def __init__(self, hdr):
+    def __init__(self, hdr, nofn=False):
 
         global filtfn, fmtch, ftypes
 
@@ -22,6 +22,12 @@ class RemFitsHdr(object):
         self.filter = None
         self.ftype = None
         self.description = None
+        self.startx = 0
+        self.starty = 0
+        self.endx = 1024
+        self.endy = 1024
+        self.ncolumns = 1024
+        self.nrows = 1024
 
         for d in ('DATE-OBS', 'DATE', '_ATE'):
             try:
@@ -38,26 +44,60 @@ class RemFitsHdr(object):
         except KeyError:
             pass
 
-        try:
-            ifname = hdr['FILENAME']
-        except KeyError:
-            raise RemFitsHdrErr("No internal filename in FITS header")
-
-        mtches = fmtch.match(ifname)
-        if mtches is None:
+        if nofn:
             if self.filter is None:
-                raise RemFitsHdrErr("No filter given and no decipherable filename")
-            self.ftype = 'Processed image'
-        else:
-            ft, quad = mtches.groups()
-            hfilt = filtfn[quad]
+                raise RemFitsHdrErr("No filename and no filter given")
+            self.ftype = "REMIR file"
+            self.description = "REMIR file dated " + dfmtd
             try:
-                self.ftype = ftypes[ft]
+                self.endx = self.ncolumns = hdr['NAXIS1']
+                self.endy = self.nrows = hdr['NAXIS2']
             except KeyError:
-                self.ftype = 'Processed image'
-            if self.filter is None:
-                self.filter = hfilt
-            elif hfilt != self.filter:
-                raise RemFitsHdrErr("Conflig on filter types between " + self.filter + " and internal filename " + ifname + " suggesting " + hfilt)
+                raise("Dimensions of data not given in FITS header")
+        else:
+            try:
+                ifname = hdr['FILENAME']
+            except KeyError:
+                raise RemFitsHdrErr("No internal filename in FITS header")
 
-        self.description = self.ftype + " dated " + dfmtd
+            mtches = fmtch.match(ifname)
+            if mtches is None:
+                if self.filter is None:
+                    raise RemFitsHdrErr("No filter given and no decipherable filename")
+                self.ftype = 'Processed image'
+            else:
+                ft, quad = mtches.groups()
+                hfilt = filtfn[quad]
+                try:
+                    self.ftype = ftypes[ft]
+                except KeyError:
+                    self.ftype = 'Processed image'
+                if self.filter is None:
+                    self.filter = hfilt
+                elif hfilt != self.filter:
+                    raise RemFitsHdrErr("Conflig on filter types between " + self.filter + " and internal filename " + ifname + " suggesting " + hfilt)
+
+            self.description = self.ftype + " dated " + dfmtd
+
+            try:
+                self.startx = hdr['startX']
+                self.starty = hdr['startY']
+                self.endx = hdr['endX']
+                self.endy = hdr['endY']
+                self.ncolumns = self.endx - self.startx
+                self.nrows = self.endy - self.starty
+            except KeyError as e:
+                raise RemFitsHdrErr(e.args[0])
+
+            if self.startx >= 1024:
+                if self.filter not in 'gr':
+                    raise RemFitsHdrErr("Filter " + self.filter + " not expected to be on right of CCD")
+            else:
+                if self.filter not in 'iz':
+                    raise RemFitsHdrErr("Filter " + self.filter + " not expected to be on left of CCD")
+            if self.starty >= 1024:
+                if self.filter not in 'gi':
+                    raise RemFitsHdrErr("Filter " + self.filter + " not expected to be on top of CCD")
+            else:
+                if self.filter not in 'rz':
+                    raise RemFitsHdrErr("Filter " + self.filter + " not expected to be on bottom of CCD")
