@@ -1,5 +1,8 @@
 import re
 from astropy.time import Time
+from astropy.io import fits
+import io
+import gzip
 
 filtfn = dict(BL='z', BR="r", UR="g", UL="i")
 fmtch = re.compile('([FBIm]).*([UB][LR])')
@@ -101,3 +104,28 @@ class RemFitsHdr(object):
             else:
                 if self.filter not in 'rz':
                     raise RemFitsHdrErr("Filter " + self.filter + " not expected to be on bottom of CCD")
+
+
+def check_has_dims(hdr):
+    """Check that dimensions are set in header and return True"""
+    try:
+        p = hdr['startX'] + hdr['startY'] + hdr['endX'] + hdr['endY']
+        return  p > 0
+    except KeyError:
+        return  False
+
+
+def set_dims_in_hdr(hdr, startx, starty, cols, rows):
+    """Set up dimensions in header in one place so we can easily change it"""
+    hdr['startX'] = (startx, 'Starting CCD pixel column')
+    hdr['endX'] = (startx + cols, 'Ending CCD pixel column+1')
+    hdr['startY'] = (starty, 'Starting CCD pixel row')
+    hdr['endY'] = (starty + rows, 'Ending CCD pixel row+1')
+
+
+def make_fits(hdr, data):
+    """Construct compressed fits file out of given header and data and return bytestring result"""
+    hdu = fits.PrimaryHDU(data, hdr)
+    mm = io.BytesIO()
+    hdu.writeto(mm)
+    return  gzip.compress(mm.getvalue())

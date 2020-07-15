@@ -4,11 +4,42 @@ import os
 import os.path
 import sys
 import dbops
+import datetime
 
 my_database = None
 my_tempdir = None
 my_libdir = None
 my_inlib = True
+
+# Dates on which geometry got changed in ascending order
+
+regeom_dates = (datetime.date(2015, 7, 27),
+                datetime.date(2019, 3, 27))
+
+# Geometry first prior to first date, then after each date
+# For each filter a tuple startx, starty, columns, rows
+
+regeom_config = (dict(z=(138, 42, 944, 960), r=(1138, 48, 910, 958), i=(62, 1112, 954, 936), g=(1124, 1082, 924, 928)),
+                 dict(z=(132, 22, 906, 956), r=(1148, 18, 900, 954), i=(94, 1112, 960, 936), g=(1170, 1072, 878, 932)),
+                 dict(z=(80, 0, 914, 960), r=(1140, 2, 908, 954), i=(80, 1104, 912, 936), g=(1148, 1054, 900, 952)))
+
+
+def get_geom(datet, filter):
+    """Get geometry as tuple startx, starty, columns, rows corresponding to date and filter"""
+
+    t = datet.date()
+    p = len(regeom_dates)
+    for pd in reversed(regeom_dates):
+        if t >= pd:
+            try:
+                return regeom_config[p][filter]
+            except KeyError:
+                return (0, 0, 512, 512)
+        p -= 1
+    try:
+        return regeom_config[0][filter]
+    except KeyError:
+        return (0, 0, 512, 512)
 
 
 def default_database():
