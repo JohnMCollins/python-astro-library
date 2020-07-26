@@ -121,11 +121,3 @@ def set_dims_in_hdr(hdr, startx, starty, cols, rows):
     hdr['endX'] = (startx + cols, 'Ending CCD pixel column+1')
     hdr['startY'] = (starty, 'Starting CCD pixel row')
     hdr['endY'] = (starty + rows, 'Ending CCD pixel row+1')
-
-
-def make_fits(hdr, data):
-    """Construct compressed fits file out of given header and data and return bytestring result"""
-    hdu = fits.PrimaryHDU(data, hdr)
-    mm = io.BytesIO()
-    hdu.writeto(mm)
-    return  gzip.compress(mm.getvalue())
