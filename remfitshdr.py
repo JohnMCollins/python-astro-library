@@ -109,8 +109,7 @@ class RemFitsHdr(object):
 def check_has_dims(hdr):
     """Check that dimensions are set in header and return True"""
     try:
-        p = hdr['startX'] + hdr['startY'] + hdr['endX'] + hdr['endY']
-        return  p > 0
+        return  (hdr['startX'], hdr['startY'])
     except KeyError:
         return  False
 

@@ -50,7 +50,7 @@ def get_saved_fits(dbcurs, ind):
     """Get FITS file when we've saved a copy"""
     if ind == 0:
         raise RemGetError("Attempting load FITS with zero ind")
-    dbcurs.execute("SELECT fitsgz FROM fitsfile WHERE ind=%d", ind)
+    dbcurs.execute("SELECT fitsgz FROM fitsfile WHERE ind=%d" % ind)
     rows = dbcurs.fetchall()
     if len(rows) == 0:
         raise RemGetError("Cannot find fits file id " + str(id))
@@ -67,3 +67,17 @@ def get_obs_fits(dbcurs, obsind):
     if ind != 0:
         return  get_saved_fits(dbcurs, ind)
     return  get_obs(ffname, dith != 0)
+
+
+def set_rejection(dbcurs, obsind, reason, table="obsinf", column="obsind"):
+    """Set rejection reason for FITS file"""
+    dbcurs.execute("UPDATE %s " % table + "SET rejreason=%s" + " WHERE %s=%d" % (column, obsind), reason)
+    dbcurs.connection.commit()
+
+
+def delete_fits(dbcurs, ind):
+    """Delete all references to FITS from database"""
+    dbcurs.execute("DELETE FROM fitsfile WHERE ind=%d" % ind)
+    dbcurs.execute("UPDATE obsinf SET ind=0 WHERE ind=%d" % ind)
+    dbcurs.execute("UPDATE iforbinf SET ind=0 WHERE ind=%d" % ind)
+    dbcurs.connection.commit()
