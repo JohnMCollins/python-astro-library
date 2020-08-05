@@ -5,6 +5,7 @@ import os.path
 import sys
 import dbops
 import datetime
+import miscutils
 
 my_database = None
 my_tempdir = None
@@ -139,3 +140,23 @@ def libfile(name):
     if my_libdir is None:
         my_libdir = get_libdir()
     return os.path.join(my_libdir, name)
+
+
+def tally_file(name):
+     """Get the location of a tally file of given name"""
+     return libfile(miscutils.replacesuffix(name, ".tally"))
+
+
+def fitsid_file(name):
+     """Get the location of a fitsids file of given name"""
+     return libfile(miscutils.replacesuffix(name, ".fitsids"))
+
+
+def meanstd_file(name):
+     """Get the location of a mean/std file of given name"""
+     return libfile(miscutils.replacesuffix(name, ".meanstd"))
+
+
+def bad_pixmask(name):
+    """Get the location of a bad pixel mask of given name"""
+    return libfile(miscutils.replacesuffix(name, ".badpix"))
