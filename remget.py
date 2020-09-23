@@ -69,6 +69,18 @@ def get_obs_fits(dbcurs, obsind):
     return  get_obs(ffname, dith != 0)
 
 
+def get_iforb_fits(dbcurs, iforbind):
+    """Get FITS file for bias or flat from either our copy or remote"""
+    dbcurs.execute("SELECT ind,ffname FROM iforbinf WHERE iforbind=%d" % iforbind)
+    rows = dbcurs.fetchall()
+    if len(rows) == 0:
+        raise RemGetError("Unable to locate iforb ind %d" % iforbind)
+    ind, ffname = rows[0]
+    if ind != 0:
+        return  get_saved_fits(dbcurs, ind)
+    return  get_iforb(ffname)
+
+
 def set_rejection(dbcurs, obsind, reason, table="obsinf", column="obsind"):
     """Set rejection reason for FITS file"""
     dbcurs.execute("UPDATE %s " % table + "SET rejreason=%s" + " WHERE %s=%d" % (column, obsind), reason)

@@ -86,7 +86,8 @@ def parsedaterange(fieldselect, daterange=None, allmonth=None, datefield='date_o
     statement into array "fieldselect" (assuming to be joined later by AND).
     Date range can be given in the "daterange" argument as date1:date2 or :date2 or date1:
     or in the allmonth argument as yyyy-mm. Field in datebase can be specified usuually date_obs
-    Return a suitable date string or none"""
+    Return a suitable date string or none
+    If single argument allow for that beeing y/m/d,h:m:s or such"""
 
     dstring = None
 
@@ -101,11 +102,18 @@ def parsedaterange(fieldselect, daterange=None, allmonth=None, datefield='date_o
     elif daterange is not None:
         datesp = daterange.split(':')
         # NB might get ValueError form parsedate, let it happen
-        if len(datesp) == 1:
+        if len(datesp) != 2:
+            # Might give specific time as well as date - allow for time delimited by :s
+            try:
+                dt = parsetime(daterange)
+                if dt.hour + dt.minute + dt.second + dt.microsecond != 0:
+                    fieldselect.append(datefield + dt.strftime("='%Y-%m-%d %H:%M:%S'"))
+                    return daterange
+            except ValueError:
+                if len(datesp) != 1:
+                    raise ValueError("Don't understand what date " + daterange + " is supposed to be")
             fieldselect.append("date(" + datefield + ")='" + parsedate(daterange) + "'")
             dstring = daterange
-        elif len(datesp) != 2:
-            raise ValueError("Don't understand whate date " + daterange + " is supposed to be")
         else:
             fd, td = datesp
             dstring = ""

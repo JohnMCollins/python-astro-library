@@ -22,18 +22,20 @@ DEFAULT_APSIZE = 6
 
 Time_origin = Time('J2000.0')
 Time_now = Time(datetime.datetime.now())
-Conv_pm = (u.mas/u.yr).to("deg/day")
+Conv_pm = (u.mas / u.yr).to("deg/day")
 
-Objdata_fields = ['objname', 'objtype', 'dist', 'rv','radeg','rapm','raerr','decdeg','decerr','decpm']
+Objdata_fields = ['objname', 'objtype', 'dispname', 'dist', 'rv', 'radeg', 'rapm', 'raerr', 'decdeg', 'decerr', 'decpm']
 for f in 'giruz':
-    for ff in ('mag','merr'):
+    for ff in ('mag', 'merr'):
         Objdata_fields.append(f + ff)
 Objdata_fields.append('apsize')
 Objdata_fields = ','.join(Objdata_fields)
 
+
 class  ObjDataError(Exception):
     """Class to report errors concerning individual objects"""
     pass
+
 
 class RaDec(object):
     """Class to store RA and Dec in providing for PM and uncertainties
@@ -41,12 +43,12 @@ class RaDec(object):
     Always store as degrees [0,360) for RA and [-90,90] for DEC
     PM stored as MAS / yr"""
 
-    def __init__(self, value = None, err = None, pm = None):
+    def __init__(self, value=None, err=None, pm=None):
         self.value = value
         self.err = err
         self.pm = pm
 
-    def getvalue(self, tfrom = None):
+    def getvalue(self, tfrom=None):
         """Get RA or DEC value alone, adjusting for pm if set,
         in which case take time from parameter (datetime object) or base time if not given"""
         if self.value is None:
@@ -57,13 +59,15 @@ class RaDec(object):
         tdiff = et - Time_origin
         return self.value + self.pm * Conv_pm * tdiff.jd
 
+
 class Mag(object):
     """Represent a magnitude with filter"""
 
-    def __init__(self, filter = None, val = None, err = None):
+    def __init__(self, filter=None, val=None, err=None):
         self.value = val
         self.filter = filter
         self.err = err
+
 
 class Maglist(object):
     """Represents a list of magnitudes with various filters"""
@@ -83,7 +87,7 @@ class Maglist(object):
         except KeyError:
             raise ObjDataError("No magnitude defined for filter " + filter)
 
-    def set_val(self, filter, value, err = None, force = True):
+    def set_val(self, filter, value, err=None, force=True):
         """Set mag value"""
         if value is None:
             return False
@@ -108,7 +112,7 @@ class Maglist(object):
         if None in errs:
             e = None
         else:
-            e = math.sqrt(np.mean(np.array(errs)**2))
+            e = math.sqrt(np.mean(np.array(errs) ** 2))
         return (m, e)
 
     def max_val(self):
@@ -120,24 +124,27 @@ class Maglist(object):
         except ValueError:
             return  0
 
+
 class ObjData(object):
     """Decreipt an individaul object"""
 
-    def __init__(self, objname = None, objtype = None, dist = None, rv = None, ra = None, dec = None):
-        self.objname = objname
+    def __init__(self, objname=None, objtype=None, dispname=None, dist=None, rv=None, ra=None, dec=None):
+        self.objname = self.dispname = objname
         self.objtype = objtype
+        if dispname is not None:
+            self.dispname = dispname
         self.dist = dist
         self.rv = rv
-        self.rightasc = RaDec(value = ra)
-        self.decl = RaDec(value = dec)
+        self.rightasc = RaDec(value=ra)
+        self.decl = RaDec(value=dec)
         self.apsize = None
         self.maglist = Maglist()
 
-    def get_ra(self, tfrom = None):
+    def get_ra(self, tfrom=None):
         """Get RA value"""
         return  self.rightasc.getvalue(tfrom)
 
-    def get_dec(self, tfrom = None):
+    def get_dec(self, tfrom=None):
         """Get DECL value"""
         return  self.decl.getvalue(tfrom)
 
@@ -149,7 +156,7 @@ class ObjData(object):
         """Set RA value"""
         self.decl = RaDec(**kwargs)
 
-    def update_ra(self, value = None, err = None, pm = None):
+    def update_ra(self, value=None, err=None, pm=None):
         """Update RA value"""
         if value is not None:
             self.rightasc.value = value
@@ -158,7 +165,7 @@ class ObjData(object):
         if pm is not None:
             self.rightasc.pm = value
 
-    def update_dec(self, value = None, err = None, pm = None):
+    def update_dec(self, value=None, err=None, pm=None):
         """Update DECL value"""
         if value is not None:
             self.decl.value = value
@@ -167,7 +174,7 @@ class ObjData(object):
         if pm is not None:
             self.decl.pm = value
 
-    def get_aperture(self, defval = DEFAULT_APSIZE):
+    def get_aperture(self, defval=DEFAULT_APSIZE):
         """Retrun aperture size of object or default value"""
         if self.apsize is None:
             return defval
@@ -177,7 +184,7 @@ class ObjData(object):
         """Set aperture size"""
         self.apsize = value
 
-    def get_mag(self, filter = None):
+    def get_mag(self, filter=None):
         """Get magnitude for given filter or average"""
         if filter is None:
             return self.maglist.av_val()
@@ -187,31 +194,34 @@ class ObjData(object):
         """Get maximum magnitude"""
         return self.maglist.max_val()
 
-    def set_mag(self, filter, value, err = None, force = True):
+    def set_mag(self, filter, value, err=None, force=True):
         """Set magnitude for given filter"""
         return self.maglist.set_val(filter, value, err, force)
 
     def load_dbrow(self, dbrow):
         """Load from row of database in order given in Objdata_fields"""
-        self.objname = dbrow[0]
-        self.objtype = dbrow[1]
-        self.dist = dbrow[2]
+        dbrow = list(dbrow)
+        self.objname = dbrow.pop(0)
+        self.objtype = dbrow.pop(0)
+        self.dispname = dbrow.pop(0)
+        self.dist = dbrow.pop(0)
         try:
-            self.rv = float(dbrow[3])
+            self.rv = float(dbrow.pop(0))
         except (TypeError, ValueError):
             self.rv = None
-        self.update_ra(value = dbrow[4], err = dbrow[5], pm =  dbrow[6])
-        self.update_dec(value = dbrow[7], err = dbrow[8], pm  = dbrow[9])
-        ncol = 10
+        v = dbrow.pop(0); e = dbrow.pop(0); pm = dbrow.pop(0)
+        self.update_ra(value=v, err=e, pm=pm)
+        v = dbrow.pop(0); e = dbrow.pop(0); pm = dbrow.pop(0)
+        self.update_dec(value=v, err=e, pm=pm)
         for f in 'giruz':
-            self.set_mag(filter = f, value = dbrow[ncol], err = dbrow[ncol+1])
-            ncol += 2
-        self.apsize = dbrow[ncol]
+            v = dbrow.pop(0); e = dbrow.pop(0)
+            self.set_mag(filter=f, value=v, err=e)
+        self.apsize = dbrow.pop(0)
 
     def add_object(self, dbcurs):
         """Add new object to database"""
 
-        fieldlist = ['objname']
+        fieldlist = ['objname', "dispname"]
         fieldvalues = []
 
         conn = dbcurs.connection
@@ -219,7 +229,9 @@ class ObjData(object):
         if self.objname is None:
             raise ObjDataError("Trying to save undefined object")
 
-        fieldvalues.append(conn.escape(self.objname))
+        nam = conn.escape(self.objname)
+        fieldvalues.append(nam)
+        fieldvalues.append(nam)  # For dispname
         if self.objtype is not None:
             fieldlist.append('objtype')
             fieldvalues.append(conn.escape(self.objtype))
@@ -301,7 +313,8 @@ class ObjData(object):
 
 # Time conversion routines
 
-def conv_when(when = None):
+
+def conv_when(when=None):
     """Convert time (default now) and return (when, tidff) where when is Time object
         and tdiff is Timedelta from J2000"""
 
@@ -318,6 +331,7 @@ def conv_when(when = None):
     return  (when, tdiff)
 
 # Get object target name from possible aliases
+
 
 def get_targetname(dbcurs, name):
     """Look up definitive name for object from name given
@@ -343,7 +357,8 @@ def get_targetname(dbcurs, name):
     rows = dbcurs.fetchall()
     return  rows[0][0]
 
-def is_defined(dbcurs,  name):
+
+def is_defined(dbcurs, name):
     """Report whether given name is defined"""
     try:
         get_targetname(dbcurs, name)
@@ -353,7 +368,8 @@ def is_defined(dbcurs,  name):
 
 # Generate MySQL query to get objects in given location adjusting for PM
 
-def gen_query(ra, dec, radius, when = None):
+
+def gen_query(ra, dec, radius, when=None):
     """Generate query for list of objects within given radius
 
     args are:
@@ -366,9 +382,10 @@ def gen_query(ra, dec, radius, when = None):
     when, tdiff = conv_when(when)
     rsq = (radius * u.arcmin).to('deg').to_value() ** 2
     pmconv = tdiff.jd * Conv_pm
-    return "POWER(radeg + rapm * " + str(pmconv) +  " - " + str(ra) + ", 2) + POWER(decdeg + decpm * " + str(pmconv) +  " - " + str(dec) + ", 2) <= " + str(rsq)
+    return "POWER(radeg + rapm * " + str(pmconv) + " - " + str(ra) + ", 2) + POWER(decdeg + decpm * " + str(pmconv) + " - " + str(dec) + ", 2) <= " + str(rsq)
 
-def get_objlist(dbcurs, ra, dec, radius, when = None):
+
+def get_objlist(dbcurs, ra, dec, radius, when=None):
     """Get object list of tupes (adjra, adjdec, object) in adjra, adjdec order
 
     Args are:
@@ -392,6 +409,7 @@ def get_objlist(dbcurs, ra, dec, radius, when = None):
     result.sort(key=operator.itemgetter(0, 1))
     return result
 
+
 def get_object(dbcurs, name):
     """Get details of object by name"""
 
@@ -403,11 +421,13 @@ def get_object(dbcurs, name):
     result.load_dbrow(rows[0])
     return result
 
+
 def add_alias(dbcurs, name, alias, source):
     """Add a single alias to name"""
     conn = dbcurs.connection
     values = [ conn.escape(name), conn.escape(alias), conn.escape(source) ]
     dbcurs.execute("INSERT INTO objalias (objname,alias,source) VALUES (" + ','.join(values) + ")")
+
 
 def del_object(dbcurs, nameorobj):
     """Delete object and its aliases from database.

@@ -333,7 +333,7 @@ class greyscale(object):
 
         mv = data.mean()
         sv = data.std()
-        va;s = np.array(sorted(self.values)) * sv + mv
+        vals = np.array(sorted(self.values)) * sv + mv
 
         # Limits might be inside range fudge if so
 
@@ -544,6 +544,7 @@ class RemGeom(object):
         """Create plot figure and return it. Initialise tick size"""
         plotfigure = plt.figure(figsize=(self.defwinfmt.width, self.defwinfmt.height))
         plt.rc("font", size=self.defwinfmt.labsize)
+        # plt.rc('fontsize', fontsize=self.defwinfmt.labsize)
         plt.rc('xtick', labelsize=self.defwinfmt.ticksize)
         plt.rc('ytick', labelsize=self.defwinfmt.ticksize)
         return plotfigure
@@ -606,6 +607,93 @@ class RemGeom(object):
         if len(gs.shades) < 1 or len(gs.values) < 2:
             raise RemGeomError("gray scale not set up in full " + str(len(gs.shades)) + " shades " + str(len(gs.values)) + " values")
         self.greyscales[gs.name] = gs
+
+    def radecgridplt(self, w, dat):
+
+        """Plot RA/DEC grid on image.
+
+            w is a "scscoord" structure
+            dat is the immage"""
+
+        if self.divspec.nocoords:
+            return
+
+        # Get coords of edges of picture
+
+        pixrows, pixcols = dat.shape
+        cornerpix = ((0, 0), (pixcols - 1, 0), (9, pixrows - 1), (pixcols - 1, pixrows - 1))
+        cornerradec = w.pix_to_coords(cornerpix)
+        isrotated = abs(cornerradec[0, 0] - cornerradec[1, 0]) < abs(cornerradec[0, 0] - cornerradec[2, 0])
+
+        # Get matrix of ra/dec each pixel
+
+        pixarray = np.array([[(x, y) for x in range(0, pixcols)] for y in range(0, pixrows)])
+        pixcoords = w.pix_to_coords(pixarray.reshape(pixrows * pixcols, 2)).reshape(pixrows, pixcols, 2)
+        ratable = pixcoords[:, :, 0]
+        dectable = pixcoords[:, :, 1]
+        ramax, decmax = cornerradec.max(axis=0)
+        ramin, decmin = cornerradec.min(axis=0)
+
+        radivs = np.linspace(ramin, ramax, self.divspec.divisions).round(self.divspec.divprec)
+        decdivs = np.linspace(decmin, decmax, self.divspec.divisions).round(self.divspec.divprec)
+
+        ra_x4miny = []
+        ra_y4minx = []
+        ra_xvals = []
+        ra_yvals = []
+        dec_x4miny = []
+        dec_y4minx = []
+        dec_xvals = []
+        dec_yvals = []
+
+        for r in radivs:
+            ra_y = np.arange(0, pixrows)
+            diffs = np.abs(ratable - r)
+            ra_x = diffs.argmin(axis=1)
+            sel = (ra_x > 0) & (ra_x < pixcols - 1)
+            ra_x = ra_x[sel]
+            ra_y = ra_y[sel]
+            if len(ra_x) == 0: continue
+            if ra_y[0] < self.divspec.divthresh:
+                ra_x4miny.append(ra_x[0])
+                ra_xvals.append(r)
+            if ra_x.min() < self.divspec.divthresh:
+                ra_y4minx.append(ra_y[ra_x.argmin()])
+                ra_yvals.append(r)
+            plt.plot(ra_x, ra_y, color=self.divspec.racol, alpha=self.divspec.divalpha)
+
+        for d in decdivs:
+            dec_x = np.arange(0, pixcols)
+            diffs = np.abs(dectable - d)
+            dec_y = diffs.argmin(axis=0)
+            sel = (dec_y > 0) & (dec_y < pixrows - 1)
+            dec_x = dec_x[sel]
+            dec_y = dec_y[sel]
+            if len(dec_x) == 0: continue
+            if dec_x[0] < self.divspec.divthresh:
+                dec_y4minx.append(dec_y[0])
+                dec_yvals.append(d)
+            if dec_y.min() < self.divspec.divthresh:
+                dec_x4miny.append(dec_x[dec_y.argmin()])
+                dec_xvals.append(d)
+            plt.plot(dec_x, dec_y, color=self.divspec.deccol, alpha=self.divspec.divalpha)
+
+        fmt = '%.' + str(self.divspec.divprec) + 'f'
+
+        if isrotated:
+            rafmt = [fmt % r for r in ra_yvals]
+            decfmt = [fmt % d for d in dec_xvals]
+            plt.yticks(ra_y4minx, rafmt)
+            plt.xticks(dec_x4miny, decfmt)
+            plt.ylabel('RA (deg)')
+            plt.xlabel('Dec (deg)')
+        else:
+            rafmt = [fmt % r for r in ra_xvals]
+            decfmt = [fmt % d for d in dec_yvals]
+            plt.xticks(ra_x4miny, rafmt)
+            plt.yticks(dec_y4minx, decfmt)
+            plt.xlabel('RA (deg)')
+            plt.ylabel('Dec (deg)')
 
 
 def load(fname=None, mustexist=False):

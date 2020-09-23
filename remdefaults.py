@@ -6,6 +6,13 @@ import sys
 import dbops
 import datetime
 import miscutils
+import numpy as np
+
+
+class RemDefError:
+    """Throw if we hit some kind of error"""
+    pass
+
 
 my_database = None
 my_tempdir = None
@@ -160,3 +167,22 @@ def meanstd_file(name):
 def bad_pixmask(name):
     """Get the location of a bad pixel mask of given name"""
     return libfile(miscutils.replacesuffix(name, ".badpix"))
+
+
+def load_bad_pixmask(name):
+    """Load bad pixel mask file"""
+
+    badpixf = bad_pixmask(name)
+    try:
+        badpixmask = np.load(badpixf)
+    except FileNotFoundError:
+        raise RemDefError("Bad pixel file " + badpixf + " does not exist")
+    except PermissionError:
+        raise RemDefError("No open permission on file " + badpixf)
+    except ValueError:
+        raise RemDefError("Bad pixel file " + badpixf + " did not load")
+    if badpixmask.dtype != np.bool:
+        raise RemDefError("Bad pixel file " + badpixf + " not boolean")
+    if badpixmask.shape != (2048, 2048):
+        raise RemDefError("Bad pixel file " + badpixf + " incorrect shape " + str(badpixmask.shape) + " should be 2048x2048")
+    return  badpixmask
