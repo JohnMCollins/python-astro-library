@@ -169,6 +169,11 @@ def bad_pixmask(name):
     return libfile(miscutils.replacesuffix(name, ".badpix"))
 
 
+def count_file(name):
+    """Get the location of a count-type file (used for counting neg pixels)"""
+    return libfile(miscutils.replacesuffix(name, ".counts"))
+
+
 def load_bad_pixmask(name):
     """Load bad pixel mask file"""
 

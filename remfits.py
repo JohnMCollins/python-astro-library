@@ -65,6 +65,10 @@ class RemFitsHdr(object):
         """Quickly return dimensions as tuple"""
         return (self.startx, self.starty, self.endx, self.endy)
 
+    def dimscr(self):
+        """Quickly return dimensions as tuple with columns and rows for quick compare"""
+        return (self.startx, self.starty, self.endx - self.startx, self.endy - self.starty)
+
     def init_from_header(self, hdr, nofn=False):
         """Initialise fields from header"""
 
@@ -255,8 +259,8 @@ def parse_filearg(name, dbcurs, type=None):
         pass
     try:
         if rname.isnumeric():
-            ind = int(name)
-            if type is None:
+            ind = int(rname)
+            if type is None or type == 'I':
                 ffmem = remget.get_obs_fits(dbcurs, ind)
             elif type == 'Z':
                 ffmem = remget.get_saved_fits(dbcurs, ind)
