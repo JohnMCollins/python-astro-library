@@ -174,6 +174,16 @@ def count_file(name):
     return libfile(miscutils.replacesuffix(name, ".counts"))
 
 
+def objloc_file(name):
+    """Get the location of an object location file"""
+    return libfile(miscutils.replacesuffix(name, ".objloc"))
+
+
+def findres_file(name):
+    """Get the location of a find results file"""
+    return libfile(miscutils.replacesuffix(name, ".findres"))
+
+
 def load_bad_pixmask(name):
     """Load bad pixel mask file"""
 

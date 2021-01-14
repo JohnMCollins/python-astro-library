@@ -2,7 +2,7 @@
 # We may update these to use XML or possibly the database
 
 import numpy as np
-import miscutils
+import remdefaults
 import os.path
 import xml.etree.ElementTree as ET
 import xmlutil
@@ -20,16 +20,18 @@ class FindResultErr(Exception):
 class FindResult(object):
     """Class for remembering a single result"""
 
-    def __init__(self, radeg=0.0, decdeg=0.0, apsize=0, col=None, row=None, label="", name="", adus=0.0, istarget=False):
+    def __init__(self, radeg=0.0, decdeg=0.0, apsize=0, col=None, row=None, label="", name="", dispname="", adus=0.0, istarget=False, isusable=True):
         self.radeg = radeg
         self.decdeg = decdeg
         self.col = col
         self.row = row
         self.apsize = apsize
         self.name = name
+        self.dispname = dispname
         self.label = label
         self.adus = adus
         self.istarget = istarget
+        self.isusable = isusable
 
     def resetapsize(self, apsize=0, row=0, col=0, adus=0.0):
         """Reset result after recalculating aperture"""
@@ -50,9 +52,15 @@ class FindResult(object):
         self.row = None
         self.apsize = 0
         self.name = ""
+        self.dispname = ""
         self.label = ""
         self.adus = 0.0
-        self.istarget = node.get("target", False)
+        self.istarget = False
+        if node.get("target", "n") == 'y':
+            self.istarget = True
+        self.isusable = True
+        if node.get("unusable", 'n') == 'y':
+            self.isnusable = False
         for child in node:
             tagn = child.tag
             if tagn == "radeg":
@@ -67,16 +75,22 @@ class FindResult(object):
                 self.apsize = xmlutil.getint(child)
             elif tagn == "name":
                 self.name = xmlutil.gettext(child)
+            elif tagn == "dispname":
+                self.dispname = xmlutil.gettext(child)
             elif tagn == "label":
                 self.label = xmlutil.gettext(child)
             elif tagn == "adus":
                 self.adus = xmlutil.getfloat(child)
+        if len(self.dispname) == 0 and self.name != 0:
+            self.dispname = self.name
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
         node = ET.SubElement(pnode, name)
         if self.istarget:
             node.set("target", "y")
+        if not self.isusable:
+            node.set("unusable", "y")
         if self.radeg != 0.0:
             xmlutil.savedata(doc, node, "radeg", self.radeg)
         if self.decdeg != 0.0:
@@ -89,6 +103,8 @@ class FindResult(object):
             xmlutil.savedata(doc, node, "apsize", self.apsize)
         if len(self.name) != 0:
             xmlutil.savedata(doc, node, "name", self.name)
+        if len(self.dispname) != 0:
+            xmlutil.savedata(doc, node, "dispname", self.dispname)
         if len(self.label) != 0:
             xmlutil.savedata(doc, node, "label", self.label)
         if self.adus != 0.0:
@@ -102,10 +118,13 @@ class FindResults(object):
         self.resultlist = []
         self.apsq = 0
         self.remfitsobj = remfitsobj
+        self.obsdate = None
+        self.filter = None
         try:
+            self.filter = remfitsobj.filter
             self.obsdate = remfitsobj.date
         except AttributeError:
-            self.obsdate = None
+            pass
 
     def results(self):
         """Generator for result list"""
@@ -135,7 +154,7 @@ class FindResults(object):
         """Reorder fesult list to take account of changed aperture/results"""
 
         self.resultlist = [r for r in self.resultlist if r.col is not None and r.row is not None]
-        self.resultlist.sort(key=lambda x: x.adus, reverse=True)
+        self.resultlist.sort(key=lambda x: x.adus + int(x.istarget) * 1e50, reverse=True)
 
     def makemask(self, apwidth):
         """Make a mask for aperature of given radius"""
@@ -293,12 +312,15 @@ class FindResults(object):
         """Load up from XML dom"""
 
         self.obsdate = None
+        self.filter = None
         self.resultlist = []
 
         for child in node:
             tagn = child.tag
             if tagn == "obsdate":
                 self.obsdate = datetime.datetime.fromisoformat(xmlutil.gettext(child))
+            elif tagn == 'filter':
+                self.filter = xmlutil.gettext(child)
             elif tagn == "results":
                 for gc in child:
                     fr = FindResult()
@@ -310,6 +332,8 @@ class FindResults(object):
         node = ET.SubElement(pnode, name)
         if self.obsdate is not None:
             xmlutil.savedata(doc, node, "obsdate", self.obsdate.isoformat())
+        if self.filter is not None:
+            xmlutil.savedata(doc, node, "filter", self.filter)
         if len(self.resultlist) != 0:
             gc = ET.SubElement(node, "results")
             for fr in self.results():
@@ -318,7 +342,7 @@ class FindResults(object):
 
 def load_results_from_file(fname, fitsobj=None):
     """Load results from results text file"""
-    fname = miscutils.replacesuffix(fname, ".findres")
+    fname = remdefaults.findres_file(fname)
     try:
         doc, root = xmlutil.load_file(fname, FINDRES_DOC_ROOT)
         fr = FindResults(fitsobj)
@@ -333,7 +357,7 @@ def load_results_from_file(fname, fitsobj=None):
 
 def save_results_to_file(results, filename, force=False):
     """Save results to results text file"""
-    filename = miscutils.replacesuffix(filename, ".findres")
+    filename = remdefaults.findres_file(filename)
     if not force and os.path.exists(filename):
         raise FindResultErr("Will not overwrite existing file " + filename)
     try:

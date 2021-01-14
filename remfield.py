@@ -1,5 +1,7 @@
 # Arg parsing for selecting obs or daily flat/bias
 
+# import sys
+
 
 class RemFieldError(Exception):
     """Throw this to indicate error in pair parse"""
@@ -34,11 +36,11 @@ def parseargs(argp, multstd=False):
 
 def parsepair(resargs, name, fslist, colname):
     """Parse an argument pair of the form a:b with a and b optional and
-    generate a field selection thing for database."""
+    generate a field selection thing for database. Return True if we parsed something"""
 
     arg = resargs[name]
     if arg is None:
-        return
+        return False
     # Bodge because it gets args starting with - wrong
     if len(arg) > 2 and arg[1] == '-':
         arg = arg[1:]
@@ -50,6 +52,7 @@ def parsepair(resargs, name, fslist, colname):
         fslist.append(colname + ">=" + lov)
     if len(hiv) != 0:
         fslist.append(colname + "<=" + hiv)
+    return True
 
 
 def getargs(resargs, fslist):
@@ -58,29 +61,38 @@ def getargs(resargs, fslist):
         parsepair(resargs, argn, fslist, dbf)
 
 
-def get_extended_args(resargs, tab, prefix, fieldselect):
+def get_extended_args(resargs, tab, prefix, fieldselect, needextra=False):
     """Build extended selection statement with prefix given and existing selection fields"""
+    extrafields = 0
     mainsel = []
+    noextra_mainsel = []
     innersel = ["filter as workfilt"]
     havingcl = []
     matchtab = ["filter=workfilt"]
     for argn, descr, dbf in Arg_names:
         mainsel.append(dbf)
+        noextra_mainsel.append(dbf)
         mainsel.append("(" + dbf + "-work.mean_" + dbf + ")/work.std_" + dbf + " AS ns_" + dbf)
         mainsel.append("ABS(" + dbf + "-work.mean_" + dbf + ")/work.std_" + dbf + " AS absns_" + dbf)
+        noextra_mainsel.append("0")
+        noextra_mainsel.append("0")
         innersel.append("AVG(" + dbf + ") AS mean_" + dbf)
         innersel.append("STD(" + dbf + ") AS std_" + dbf)
-        parsepair(resargs, "nstd_" + argn, havingcl, "ns_" + dbf)
-        parsepair(resargs, "abs_nstd_" + argn, havingcl, "absns_" + dbf)
+        if parsepair(resargs, "nstd_" + argn, havingcl, "ns_" + dbf): extrafields += 1
+        if parsepair(resargs, "abs_nstd_" + argn, havingcl, "absns_" + dbf): extrafields += 1
         matchtab.append("std_" + dbf + "!=0")
 
     resselstr = prefix
     if len(resselstr) != 0 and resselstr[-1] != ',':
         resselstr += ","
-    resselstr += ",".join(mainsel) + " FROM " + tab
-    resselstr += ",(SELECT " + ",".join(innersel)
-    resselstr += " FROM " + tab + " WHERE " + " AND ".join(fieldselect)
-    resselstr += " GROUP BY workfilt) AS work WHERE " + " AND ".join(matchtab + fieldselect)
-    if len(havingcl) != 0:
-        resselstr += " HAVING " + " AND ".join(havingcl)
+    # print("Extra fields", extrafields, file=sys.stderr)
+    if needextra or extrafields > 0:
+        resselstr += ",".join(mainsel) + " FROM " + tab
+        resselstr += ",(SELECT " + ",".join(innersel)
+        resselstr += " FROM " + tab + " WHERE " + " AND ".join(fieldselect)
+        resselstr += " GROUP BY workfilt) AS work WHERE " + " AND ".join(matchtab + fieldselect)
+        if len(havingcl) != 0:
+            resselstr += " HAVING " + " AND ".join(havingcl)
+    else:
+        resselstr += ",".join(noextra_mainsel) + " FROM " + tab + " WHERE " + " AND ".join(fieldselect)
     return  resselstr

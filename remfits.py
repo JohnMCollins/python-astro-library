@@ -222,7 +222,7 @@ class RemFits(RemFitsHdr):
         except remget.RemGetErr as e:
             raise RemFitsErr(e.args[0])
         hdr, data = fitsops.mem_get(ffmem)
-        if ndr is None or data is None:
+        if hdr is None or data is None:
             raise RemFitsErr("Could not fetch obsind=$d" % obsind)
         self.init_from(hdr, data)  # # FIXME to cope with REMIR
 

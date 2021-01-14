@@ -179,6 +179,7 @@ class Objdisp(object):
 
     def set_defaults(self):
         """Initialise to default values"""
+        self.targcolour = "red"
         self.objcolour = ["cyan" ]
         self.objalpha = 1.0
         self.objtextfs = 12
@@ -190,7 +191,9 @@ class Objdisp(object):
         self.set_defaults()
         for child in node:
             tagn = child.tag
-            if tagn == "objcolour":
+            if tagn == "targcolour":
+                self.targcolour = xmlutil.gettext(child)
+            elif tagn == "objcolour":
                 self.objcolour = xmlutil.gettext(child).split(':')
             elif tagn == "objalpha":
                 self.objalpha = xmlutil.getfloat(child)
@@ -206,6 +209,7 @@ class Objdisp(object):
         node = ET.SubElement(pnode, name)
         if self.objfill:
             ET.SubElement(node, "objfill")
+        xmlutil.savedata(doc, node, "targcolour", self.targcolour)
         xmlutil.savedata(doc, node, "objcolour", ":".join(self.objcolour))
         xmlutil.savedata(doc, node, "objalpha", self.objalpha)
         xmlutil.savedata(doc, node, "objtextfs", self.objtextfs)
