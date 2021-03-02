@@ -5,17 +5,12 @@
 # @Last modified by:   jmc
 # @Last modified time: 2018-12-17T22:48:34+00:00
 
-# routines for object info database
+"""outines for object info database"""
 
-import re
 from astropy.time import Time
 from astropy.coordinates import SkyCoord
-import datetime
 import astropy.units as u
-import miscutils
-import numpy as np
 import pymysql
-import sys
 
 DEFAULT_APSIZE = 6
 Possible_filters = 'girzHJK'
@@ -23,7 +18,6 @@ Possible_filters = 'girzHJK'
 
 class  ObjDataError(Exception):
     """Class to report errors concerning individual objects"""
-    pass
 
 
 def get_objname(dbcurs, alias):
@@ -40,7 +34,16 @@ def get_objname(dbcurs, alias):
         raise ObjDataError("Unknown object or alias name", alias)
 
 
-class ObjAlias(object):
+def nameused(dbcurs, name):
+    """Check if name is in use before manually adding it"""
+    try:
+        get_objname(dbcurs, name)
+        return True
+    except ObjDataError:
+        return False
+
+
+class ObjAlias:
     """Representation of the alias of an object"""
 
     def __init__(self, aliasname=None, objname=None, source=None, sbok=True):
@@ -94,8 +97,7 @@ class ObjAlias(object):
         except pymysql.MySQLError as e:
             if e.args[0] == 1062:
                 raise ObjDataError("Duplicate alias " + self.aliasname + " object", self.objname)
-            else:
-                raise ObjDataError("Could not insert alias " + self.aliasname, e.args[1])
+            raise ObjDataError("Could not insert alias " + self.aliasname, e.args[1])
 
     def update(self, dbcurs):
         """Update object to database"""
@@ -131,7 +133,7 @@ class ObjAlias(object):
             raise ObjDataError("No alias to delete of name", self.aliasname)
 
 
-class ObjData(object):
+class ObjData:
     """Decreipt an individaul object"""
 
     def __init__(self, objname=None, objtype=None, dispname=None):
@@ -143,6 +145,7 @@ class ObjData(object):
         self.dist = self.rv = self.ra = self.dec = self.rapm = self.decpm = None
         self.gmag = self.imag = self.rmag = self.zmag = self.Hmag = self.Jmag = self.Kmag = None
         self.apsize = DEFAULT_APSIZE
+        self.invented = False
         self.usable = True
 
     def get(self, dbcurs, name=None):
@@ -152,14 +155,13 @@ class ObjData(object):
             name = self.objname
             if name is None:
                 raise ObjDataError("No name supplied for ObjData", "")
-        dbcurs.execute("SELECT objname,objtype,dispname,vicinity,dist,rv,radeg,decdeg,rapm,decpm,gmag,imag,rmag,zmag,Hmag,Jmag,Kmag,apsize,usable FROM objdata WHERE objname=%s", get_objname(dbcurs, name))
+        dbcurs.execute("SELECT objname,objtype,dispname,vicinity,dist,rv,radeg,decdeg,rapm,decpm,gmag,imag,rmag,zmag,Hmag,Jmag,Kmag,apsize,invented,usable FROM objdata WHERE objname=%s", get_objname(dbcurs, name))
         f = dbcurs.fetchall()
         if len(f) != 1:
             if len(f) == 0:
                 raise ObjDataError("(warning) Object not found", name)
-            else:
-                raise ObjDataError("Internal problem too many objects with name", name)
-        self.objname, self.objtype, self.dispname, self.vicinity, self.dist, self.rv, self.ra, self.dec, self.rapm, self.decpm, self.gmag, self.imag, self.rmag, self.zmag, self.Hmag, self.Jmag, self.Kmag, self.apsize, self.usable = f[0]
+            raise ObjDataError("Internal problem too many objects with name", name)
+        self.objname, self.objtype, self.dispname, self.vicinity, self.dist, self.rv, self.ra, self.dec, self.rapm, self.decpm, self.gmag, self.imag, self.rmag, self.zmag, self.Hmag, self.Jmag, self.Kmag, self.apsize, self.invented, self.usable = f[0]
 
     def is_target(self):
         """Report if it's the target by comparing with vicinity"""
@@ -219,6 +221,11 @@ class ObjData(object):
 
         fieldnames.append("apsize")
         fieldvalues.append("%d" % self.apsize)
+        fieldnames.append("invented")
+        if self.invented:
+            fieldvalues.append("1")
+        else:
+            fieldvalues.append("0")
         fieldnames.append("usable")
         if self.usable:
             fieldvalues.append("1")
@@ -261,6 +268,10 @@ class ObjData(object):
             if val is not None:
                 fields.append("%s=%.6g" % (aname, val))
         fields.append("apsize=%d" % self.apsize)
+        if self.invented:
+            fields.append("invented=1")
+        else:
+            fields.append("invented=0")
         if self.usable:
             fields.append("usable=1")
         else:
@@ -300,6 +311,12 @@ class ObjData(object):
                 continue
             result.append(ObjAlias(aliasname=alias, objname=self.objname, source=source, sbok=sbok))
         return  result
+
+    def list_allnames(self, dbcurs):
+        """Get all the names and aliases of an object as a sorted list"""
+        result = [a.aliasname for a in self.list_aliases(dbcurs)]
+        result.append(self.objname)
+        return sorted(result)
 
     def add_alias(self, dbcurs, aliasname, source, sbok=True):
         """Add an alias"""

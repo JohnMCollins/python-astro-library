@@ -1,17 +1,18 @@
-# Classes for handling REM FITS files
+"""Classes for handling REM FITS files"""
 
 import re
 from astropy.time import Time
 from astropy.io import fits
 import numpy as np
 import remget
-import remdefaults
 import fitsops
 import wcscoord
+import miscutils
 
 filtfn = dict(BL='z', BR="r", UR="g", UL="i")
 revfn = dict()
-for k, v in filtfn.items(): revfn[v] = k
+for k, v in filtfn.items():
+    revfn[v] = k
 fmtch = re.compile('([FBImCR]).*([UB][LR])')
 
 # Second element tells us whether to look for coords
@@ -20,7 +21,6 @@ ftypes = dict(F=('Daily flat', False), B=('Daily bias', False), I=('Image', True
 
 class RemFitsErr(Exception):
     """Throw this is something wrong"""
-    pass
 
 
 def check_has_dims(hdr):
@@ -39,7 +39,7 @@ def set_dims_in_hdr(hdr, startx, starty, cols, rows):
     hdr['endY'] = (starty + rows, 'Ending CCD pixel row+1')
 
 
-class RemFitsHdr(object):
+class RemFitsHdr:
     """Get bits we want from header"""
 
     def __init__(self, hdr=None, nofn=False):
@@ -117,7 +117,7 @@ class RemFitsHdr(object):
                 self.endx = self.ncolumns = hdr['NAXIS1']
                 self.endy = self.nrows = hdr['NAXIS2']
             except KeyError:
-                raise("Dimensions of data not given in FITS header")
+                raise RemFitsErr("Dimensions of data not given in FITS header")
         else:
             try:
                 ifname = hdr['FILENAME']
@@ -175,7 +175,7 @@ class RemFitsHdr(object):
 class RemFits(RemFitsHdr):
     """As above but hold data as well with appropriate trim and conversion"""
 
-    def __init__(self, hdr=None, data=None, nofn=False):
+    def __init__(self, hdr=None, data=None, nofn=False, from_obsind=0):
 
         super().__init__(hdr, nofn)
         self.data = data
@@ -183,6 +183,7 @@ class RemFits(RemFitsHdr):
         self.stdval = 0.0
         if data is not None:
             self.norm_data()
+        self.from_obsind = from_obsind
 
     def init_from_data(self, data):
         """Initialise from data given"""
@@ -206,12 +207,11 @@ class RemFits(RemFitsHdr):
     def load_from_fits(self, fname):
         """Load and fill up from specified file"""
         try:
-            ff = fits.open(fname)
+            ff = fits.open(miscutils.replacesuffix(fname, 'fits.gz'))
         except OSError as e:
             if e.strerror is None:
                 raise RemFitsErr(fname + " is not a valid FITS file")
-            else:
-                raise RemFitsErr("Open of " + fname + " gave error " + e.strerror)
+            raise RemFitsErr("Open of " + fname + " gave error " + e.strerror)
         self.init_from(ff[0].header, ff[0].data)
         ff.close()
 
@@ -219,18 +219,19 @@ class RemFits(RemFitsHdr):
         """Load and fill up from obsind"""
         try:
             ffmem = remget.get_obs_fits(dbcurs, obsind)
-        except remget.RemGetErr as e:
+        except remget.RemGetError as e:
             raise RemFitsErr(e.args[0])
         hdr, data = fitsops.mem_get(ffmem)
         if hdr is None or data is None:
             raise RemFitsErr("Could not fetch obsind=$d" % obsind)
         self.init_from(hdr, data)  # # FIXME to cope with REMIR
+        self.from_obsind = obsind
 
     def load_from_iforbind(self, dbcurs, iforbind):
         """Load and fill up from iforbind"""
         try:
             ffmem = remget.get_iforb_fits(dbcurs, iforbind)
-        except remget.RemGetErr as e:
+        except remget.RemGetError as e:
             raise RemFitsErr(e.args[0])
         hdr, data = fitsops.mem_get(ffmem)
         if hdr is None or data is None:
@@ -240,7 +241,7 @@ class RemFits(RemFitsHdr):
 # Parse argument file and return a suitable RemFits object
 
 
-def parse_filearg(name, dbcurs, type=None):
+def parse_filearg(name, dbcurs, typef=None):
     """Parse a file or ID string given. Should be of given type or don't care
     May expand this later to load up library files.
     Currently name is a file name if it isn't numeric, in which case it's supposed to be
@@ -250,19 +251,41 @@ def parse_filearg(name, dbcurs, type=None):
     If Flat or Bias file, check loaded file is correct type.
     We may extend this later to cope with expenaded Flat or Bias files."""
 
+    fobs = 0
+
+    if isinstance(name, int):
+        try:
+            if typef is None or typef == 'I':
+                ffmem = remget.get_obs_fits(dbcurs, name)
+                fobs = name
+            elif typef == 'Z':
+                ffmem = remget.get_saved_fits(dbcurs, name)
+            else:
+                ffmem = remget.get_iforb_fits(dbcurs, name)
+
+            hdr, data = fitsops.mem_get(ffmem)
+
+            if hdr is None:
+                raise RemFitsErr("Could not decode FITS file for " + str(name))
+            return  RemFits(hdr, data, from_obsind=fobs)
+
+        except remget.RemGetError as e:
+            raise RemFitsErr("Error fetching file for " + name + " - " + e.args[0])
+
     rname = name
     try:
         if name[1] == ':':
-            type = name[0]
+            typef = name[0]
             rname = name[2:]
     except IndexError:
         pass
     try:
         if rname.isnumeric():
             ind = int(rname)
-            if type is None or type == 'I':
+            if typef is None or typef == 'I':
                 ffmem = remget.get_obs_fits(dbcurs, ind)
-            elif type == 'Z':
+                fobs = ind
+            elif typef == 'Z':
                 ffmem = remget.get_saved_fits(dbcurs, ind)
             else:
                 ffmem = remget.get_iforb_fits(dbcurs, ind)
@@ -271,20 +294,18 @@ def parse_filearg(name, dbcurs, type=None):
 
             if hdr is None:
                 raise RemFitsErr("Could not decode FITS file for " + name)
-            return  RemFits(hdr, data)
+            return  RemFits(hdr, data, from_obsind=fobs)
 
-        else:
+        r = RemFits()
+        r.load_from_fits(rname)
 
-            r = RemFits()
-            r.load_from_fits(rname)
+        if typef is not None and typef != 'Z':
+            if typef == 'F' and r.ftype != 'Daily flat' and r.ftype != 'Combined flat' and r.ftype != 'Master':
+                raise RemFitsErr("Expecting " + name + " to be flat file not " + r.ftype)
+            if typef == 'B' and r.ftype != 'Daily bias' and r.ftype != 'Combined bias' and r.ftype != 'Master':
+                raise RemFitsErr("Expecting " + name + " to be bias file not " + r.ftype)
 
-            if type is not None and type != 'Z':
-                if type == 'F' and r.ftype != 'Daily flat' and r.ftype != 'Combined flat' and r.ftype != 'Master':
-                    raise RemFitsErr("Expecting " + name + " to be flat file not " + r.ftype)
-                if type == 'B' and r.ftype != 'Daily bias' and r.ftype != 'Combined bias' and r.ftype != 'Master':
-                    raise RemFitsErr("Expecting " + name + " to be bias file not " + r.ftype)
-
-            return  r
+        return  r
 
     except remget.RemGetError as e:
         raise RemFitsErr("Error fetching file for " + name + " - " + e.args[0])

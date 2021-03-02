@@ -1,27 +1,24 @@
-# Save options in home control file for later recovery
+"""Save REM geom and display settings"""
 
-import os
 import sys
-import string
+import copy
 import xml.etree.ElementTree as ET
 import xmlutil
 import configfile
 import matplotlib.pyplot as plt
 import numpy as np
-import copy
 
 
 class RemGeomError(Exception):
     """Throw in case of errors"""
-    pass
 
 
-class Imlimits(object):
+class Imlimits:
     """Remember maximum size we can use for each filter"""
 
-    def __init__(self, filter=None, rows=1024, cols=1024):
+    def __init__(self, filt=None, rows=1024, cols=1024):
 
-        self.filter = filter
+        self.filter = filt
         self.rows = rows
         self.cols = cols
 
@@ -49,7 +46,7 @@ class Imlimits(object):
         xmlutil.savedata(doc, node, "cols", self.cols)
 
 
-class Trims(object):
+class Trims:
     """Remember number of pixels to trim from each end of each frame"""
 
     def __init__(self):
@@ -120,7 +117,7 @@ class Trims(object):
             ET.SubElement(node, "afterblank")
 
 
-class Divspec(object):
+class Divspec:
     """Preferences for division display"""
 
     def __init__(self):
@@ -171,7 +168,7 @@ class Divspec(object):
         xmlutil.savedata(doc, node, "divalpha", self.divalpha)
 
 
-class Objdisp(object):
+class Objdisp:
     """Specify how objects are highlighted"""
 
     def __init__(self):
@@ -180,7 +177,8 @@ class Objdisp(object):
     def set_defaults(self):
         """Initialise to default values"""
         self.targcolour = "red"
-        self.objcolour = ["cyan" ]
+        self.idcolour = "yellow"
+        self.objcolour = "cyan"
         self.objalpha = 1.0
         self.objtextfs = 12
         self.objtextdisp = 30
@@ -193,8 +191,10 @@ class Objdisp(object):
             tagn = child.tag
             if tagn == "targcolour":
                 self.targcolour = xmlutil.gettext(child)
+            elif tagn == "idcolour":
+                self.idcolour = xmlutil.gettext(child)
             elif tagn == "objcolour":
-                self.objcolour = xmlutil.gettext(child).split(':')
+                self.objcolour = xmlutil.gettext(child)
             elif tagn == "objalpha":
                 self.objalpha = xmlutil.getfloat(child)
             elif tagn == "objtextfs":
@@ -210,13 +210,14 @@ class Objdisp(object):
         if self.objfill:
             ET.SubElement(node, "objfill")
         xmlutil.savedata(doc, node, "targcolour", self.targcolour)
-        xmlutil.savedata(doc, node, "objcolour", ":".join(self.objcolour))
+        xmlutil.savedata(doc, node, "idcolour", self.idcolour)
+        xmlutil.savedata(doc, node, "objcolour", self.objcolour)
         xmlutil.savedata(doc, node, "objalpha", self.objalpha)
         xmlutil.savedata(doc, node, "objtextfs", self.objtextfs)
         xmlutil.savedata(doc, node, "objtextdisp", self.objtextdisp)
 
 
-class Winfmt(object):
+class Winfmt:
     """Label format stuff for display"""
 
     def __init__(self):
@@ -264,7 +265,7 @@ def checkdups(lst, name):
     raise RemGeomError(name + " has duplicate " + ' '.join(dl))
 
 
-class greyscale(object):
+class greyscale:
     """This represents graycale parameters as either percentiles or standerd devs"""
 
     def __init__(self, n=""):
@@ -396,13 +397,13 @@ class greyscale(object):
             node.set("inverse", "y")
         cnode = ET.SubElement(node, "shades")
         for s in self.shades:
-             xmlutil.savedata(doc, cnode, "s", s)
+            xmlutil.savedata(doc, cnode, "s", s)
         cnode = ET.SubElement(node, "values")
         for v in self.values:
             xmlutil.savedata(doc, cnode, "v", v)
 
 
-class RemGeom(object):
+class RemGeom:
     """Represent common parameters for Rem programs"""
 
     def __init__(self):
@@ -415,6 +416,7 @@ class RemGeom(object):
         self.altfmts = dict()
         self.shades = dict()
         self.greyscales = dict()
+        self.defgreyscale = None
 
     def list_altfmts(self):
         """Get a list of alternative formats"""
@@ -424,12 +426,13 @@ class RemGeom(object):
         """Load parameters from XML file"""
 
         self.imlims = dict()
-        self.curtrims = self.trims = Trims()
+        self.curtrims = self.deftrims = Trims()
         self.ftrims = dict()
         self.divspec = Divspec()
         self.defwinfmt = Winfmt()
         self.altfmts = dict()
         self.greyscales = dict()
+        self.defgreyscale = None
 
         for child in node:
             tagn = child.tag
@@ -473,6 +476,8 @@ class RemGeom(object):
                     gs = greyscale()
                     gs.load(gc)
                     self.greyscales[gs.name] = gs
+            elif tagn == "defgreyscale":
+                self.defgreyscale = xmlutil.gettext(child)
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
@@ -497,6 +502,8 @@ class RemGeom(object):
             gss = ET.SubElement(node, "greyscales")
             for gs in self.greyscales.values():
                 gs.save(doc, gss, "greyscale")
+        if self.defgreyscale is not None:
+            xmlutil.savedata(doc, node, "defgreyscale", self.defgreyscale)
 
     def disp_argparse(self, argp, fmt=None):
         """Initialise arg parser with display options"""
@@ -574,12 +581,12 @@ class RemGeom(object):
             result.append(self.curtrims.apply_image(a))
         return tuple(result)
 
-    def get_imlim(self, filter):
+    def get_imlim(self, filt):
         """Get image limits for filter"""
         try:
-            return self.imlims[filter]
+            return self.imlims[filt]
         except KeyError:
-            return Imlimits(filter=filter)
+            return Imlimits(filt=filt)
 
     def set_imlim(self, il):
         """Set image limits for filter"""
@@ -601,6 +608,8 @@ class RemGeom(object):
         """Delete gray scale"""
         try:
             del self.greyscales[name]
+            if self.defgreyscale == name:
+                self.defgreyscale = None
         except KeyError:
             pass
 
@@ -611,6 +620,12 @@ class RemGeom(object):
         if len(gs.shades) < 1 or len(gs.values) < 2:
             raise RemGeomError("gray scale not set up in full " + str(len(gs.shades)) + " shades " + str(len(gs.values)) + " values")
         self.greyscales[gs.name] = gs
+
+    def set_defgreyscale(self, name):
+        """Set default greyscale"""
+        if name not in self.greyscales:
+            raise RemGeomError("Unknown grey scale " + name)
+        self.defgreyscale = name
 
     def radecgridplt(self, w, dat):
 
@@ -657,7 +672,8 @@ class RemGeom(object):
             sel = (ra_x > 0) & (ra_x < pixcols - 1)
             ra_x = ra_x[sel]
             ra_y = ra_y[sel]
-            if len(ra_x) == 0: continue
+            if len(ra_x) == 0:
+                continue
             if ra_y[0] < self.divspec.divthresh:
                 ra_x4miny.append(ra_x[0])
                 ra_xvals.append(r)
@@ -673,7 +689,8 @@ class RemGeom(object):
             sel = (dec_y > 0) & (dec_y < pixrows - 1)
             dec_x = dec_x[sel]
             dec_y = dec_y[sel]
-            if len(dec_x) == 0: continue
+            if len(dec_x) == 0:
+                continue
             if dec_x[0] < self.divspec.divthresh:
                 dec_y4minx.append(dec_y[0])
                 dec_yvals.append(d)

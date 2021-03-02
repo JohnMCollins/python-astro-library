@@ -1,4 +1,4 @@
-# Match find results to object locations
+"""Match find results to object locations"""
 
 import numpy as np
 
@@ -6,22 +6,21 @@ import numpy as np
 class FindError(Exception):
     """Raise this if we get problems with finding things"""
 
-    def __init__(self, msg, rmsg=None, cmsg=None):
+    def __init__(self, msg, rmsg=None):
 
-        super(FindError, self).__init__(self, msg, rmsg, cmsg)
+        super().__init__(self, msg, rmsg)
 
 
-def allocate_locs(locresults, findresults, threshold=20.0):
+def allocate_locs(locresults, findresults, threshold=20.0, nocheck=False):
     """Attempt to allocate locations and results theshold gives limit in aresec we don't consider it matching in"""
 
     # build cross-table of locations by row and find results by column giving distances as a complex
     # with RA in the real part and DEC in the imageinary part
 
-    ctab = np.subtract.outer([complex(l.radeg, l.decdeg) for l in locresults.results()], [complex(f.radeg, f.decdeg) for f in findresults.results()])
+    ctab = np.subtract.outer([complex(l.radeg, 2 * l.decdeg) for l in locresults.results()], [complex(f.radeg, 2 * f.decdeg) for f in findresults.results()])
 
     # We put target as first result in locresults so start from there
-
-    targloc = locresults.resultlist[0]
+    # targloc = locresults.resultlist[0]
 
     # Get index of nearest to target (there might be equals but the find results are ordered as brightest first
     # and we assume target is amongst brightest)
@@ -52,27 +51,36 @@ def allocate_locs(locresults, findresults, threshold=20.0):
         for r, c in zip(rlist, clist):
             rtab.append((r, c, d))
 
-    hadrows = [p[0] for p in rtab]
+    if nocheck:
+        return rtab
+
     hadcols = [p[1] for p in rtab]
-    srows = set(hadrows)
     scols = set(hadcols)
-    if len(hadrows) != len(srows) or len(hadcols) != len(scols):
-        dupr = []
+
+    if len(hadcols) != len(set(hadcols)):
         dupc = []
-        for r in hadrows:
-            if r not in srows:
-                dupr.append(r)
-            srows.dicard(r)
         for c in hadcols:
             if c not in scols:
                 dupc.append(c)
             scols.discard(c)
-        dupr.sort()
         dupc.sort()
-        if len(dupr) != 0:
-            if len(dupc) != 0:
-                raise FindError("Duplicated rows and columns", dupr, dupc)
-            raise FindError("Duplicated rows", dupr)
-        else:
-            raise FindError("Duplicated cols", None, dupc)
+        raise FindError("Duplicated cols", dupc)
+
+    hadrows = [p[0] for p in rtab]
+    srows = set(hadrows)
+
+    if len(hadrows) != len(srows):
+        newrtab = []
+        for row, col, dist in rtab:
+            if row not in srows:
+                continue
+            cols = [r[1] for r in rtab if r[0] == row]
+            if len(cols) != 1:
+                dists = np.array([r[2] for r in rtab if r[0] == row])
+                am = dists.argmin()
+                newrtab.append((row, cols[am], dists[am]))
+            else:
+                newrtab.append((row, col, dist))
+            srows.discard(row)
+        return  newrtab
     return rtab

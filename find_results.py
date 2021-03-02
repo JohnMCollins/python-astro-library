@@ -1,12 +1,12 @@
-# General Class for find results
-# We may update these to use XML or possibly the database
+"""Classes for reesult finding as XML"""
 
-import numpy as np
-import remdefaults
 import os.path
 import xml.etree.ElementTree as ET
-import xmlutil
 import datetime
+import numpy as np
+import xmlutil
+import remdefaults
+
 # import sys
 
 FINDRES_DOC_ROOT = "Findres"
@@ -14,13 +14,12 @@ FINDRES_DOC_ROOT = "Findres"
 
 class FindResultErr(Exception):
     """"Throw if error faound"""
-    pass
 
 
-class FindResult(object):
+class FindResult:
     """Class for remembering a single result"""
 
-    def __init__(self, radeg=0.0, decdeg=0.0, apsize=0, col=None, row=None, label="", name="", dispname="", adus=0.0, istarget=False, isusable=True):
+    def __init__(self, radeg=0.0, decdeg=0.0, apsize=0, col=None, row=None, label="", name="", dispname="", adus=0.0, istarget=False, isusable=True, invented=False):
         self.radeg = radeg
         self.decdeg = decdeg
         self.col = col
@@ -31,6 +30,7 @@ class FindResult(object):
         self.label = label
         self.adus = adus
         self.istarget = istarget
+        self.invented = invented
         self.isusable = isusable
 
     def resetapsize(self, apsize=0, row=0, col=0, adus=0.0):
@@ -55,12 +55,9 @@ class FindResult(object):
         self.dispname = ""
         self.label = ""
         self.adus = 0.0
-        self.istarget = False
-        if node.get("target", "n") == 'y':
-            self.istarget = True
-        self.isusable = True
-        if node.get("unusable", 'n') == 'y':
-            self.isnusable = False
+        self.istarget = node.get("target", "n") == 'y'
+        self.invented = node.get("invented", "n") == 'y'
+        self.isusable = node.get("unusable", 'n') != 'y'
         for child in node:
             tagn = child.tag
             if tagn == "radeg":
@@ -89,6 +86,8 @@ class FindResult(object):
         node = ET.SubElement(pnode, name)
         if self.istarget:
             node.set("target", "y")
+        if self.invented:
+            node.set("invented", 'y')
         if not self.isusable:
             node.set("unusable", "y")
         if self.radeg != 0.0:
@@ -111,7 +110,7 @@ class FindResult(object):
             xmlutil.savedata(doc, node, "adus", self.adus)
 
 
-class FindResults(object):
+class FindResults:
     """A class for remembering things we've found"""
 
     def __init__(self, remfitsobj=None):
@@ -120,6 +119,8 @@ class FindResults(object):
         self.remfitsobj = remfitsobj
         self.obsdate = None
         self.filter = None
+        self.totsignif = None
+        self.signif = None
         try:
             self.filter = remfitsobj.filter
             self.obsdate = remfitsobj.date
@@ -141,13 +142,13 @@ class FindResults(object):
 
     def relabel(self):
         """Assign labels to reordered list"""
-        lng = len(self.resultlist)
         n = 0
+        base = ord('A')
         for r in self.resultlist:
-            try:
-                r.label = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijlmnopqrstuvwxyz"[n]
-            except IndexError:
-                r.label = "Obj%.3d" % n
+            l = chr(base + n % 26)
+            if n > 26:
+                l += str(n // 26)
+            r.label = l
             n += 1
 
     def reorder(self):
@@ -191,7 +192,7 @@ class FindResults(object):
         startcol = ignleft + mincol
         startrow = ignbottom + minrow
         maxrow = pixrows - apdiam - igntop  # This is actually 1 more
-        maxcol = pixcols - apdiam - ignbottom  # This is actually 1 more
+        maxcol = pixcols - apdiam - ignright  # This is actually 1 more
         # print("Rows %d to %d cols %d to %d" % (minrow, maxrow, mincol, maxcol), file=sys.stderr)
 
         # Kick off with masj ub bottom left
@@ -247,6 +248,9 @@ class FindResults(object):
         if len(self.resultlist) != 0:
             self.calccoords()
             self.relabel()
+
+        self.signif = sign
+        self.totsignif = totsign
         return  len(self.resultlist)
 
     def calccoords(self):
@@ -291,7 +295,7 @@ class FindResults(object):
         imagedata = self.remfitsobj.data
         pixrows, pixcols = imagedata.shape
         mask = self.makemask(apsize)
-        points = np.sum(mask)
+        # points = np.sum(mask)
         apdiam = 2 * apsize + 1
         mincol = minrow = apsize - 1
         maxrow = pixrows - apdiam  # This is actually 1 more
@@ -314,6 +318,8 @@ class FindResults(object):
         self.obsdate = None
         self.filter = None
         self.resultlist = []
+        self.signif = None
+        self.totsignif = None
 
         for child in node:
             tagn = child.tag
@@ -326,6 +332,10 @@ class FindResults(object):
                     fr = FindResult()
                     fr.load(gc)
                     self.resultlist.append(fr)
+            elif tagn == "signif":
+                self.signif = xmlutil.getfloat(child)
+            elif tagn == "totsignif":
+                self.totsignif = xmlutil.getfloat(child)
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
@@ -338,6 +348,10 @@ class FindResults(object):
             gc = ET.SubElement(node, "results")
             for fr in self.results():
                 fr.save(doc, gc, "result")
+        if self.signif is not None:
+            xmlutil.savedata(doc, node, "signif", self.signif)
+        if self.totsignif is not None:
+            xmlutil.savedata(doc, node, "totsignif", self.totsignif)
 
 
 def load_results_from_file(fname, fitsobj=None):
@@ -365,4 +379,4 @@ def save_results_to_file(results, filename, force=False):
         results.save(doc, root, "RES")
         xmlutil.complete_save(filename, doc)
     except xmlutil.XMLError as e:
-        raise FindResultErr("Save of " + fname + " gave " + e.args[0])
+        raise FindResultErr("Save of " + filename + " gave " + e.args[0])

@@ -1,10 +1,10 @@
-# General Class for locations of objloc list
+"""General Class for locations of objloc list"""
 
-import numpy as np
 import os.path
-import xml.etree.ElementTree as ET
-import xmlutil
 import datetime
+import xml.etree.ElementTree as ET
+import numpy as np
+import xmlutil
 import remdefaults
 # import sys
 
@@ -13,20 +13,21 @@ OBJLOC_DOC_ROOT = "Objloc"
 
 class ObjLocErr(Exception):
     """"Throw if error faound"""
-    pass
 
 
-class ObjLoc(object):
+class ObjLoc:
     """Class for remembering an object location"""
 
-    def __init__(self, radeg=0.0, decdeg=0.0, col=0, row=0, name="", dispname="", istarget=False, isusable=True):
+    def __init__(self, radeg=0.0, decdeg=0.0, col=0, row=0, name="", dispname="", apsize=6, istarget=False, invented=False, isusable=True):
         self.radeg = radeg
         self.decdeg = decdeg
         self.col = col
         self.row = row
         self.name = name
         self.dispname = dispname
+        self.apsize = apsize
         self.istarget = istarget
+        self.invented = invented
         self.isusable = isusable
 
     def load(self, node):
@@ -37,11 +38,10 @@ class ObjLoc(object):
         self.row = 0
         self.name = ""
         self.dispname = ""
-        if node.get("target", "n") == 'y':
-            self.istarget = True
-        self.isusable = True
-        if node.get("unusable", 'n') == 'y':
-            self.isnusable = False
+        self.apsize = 6
+        self.istarget = node.get("target", 'n') == 'y'
+        self.invented = node.get("invented", 'n') == 'y'
+        self.isusable = node.get("unusable", 'n') != 'y'
         for child in node:
             tagn = child.tag
             if tagn == "radeg":
@@ -56,12 +56,16 @@ class ObjLoc(object):
                 self.name = xmlutil.gettext(child)
             elif tagn == "dispname":
                 self.dispname = xmlutil.gettext(child)
+            elif tagn == "apsize":
+                self.apsize = xmlutil.getint(child)
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
         node = ET.SubElement(pnode, name)
         if self.istarget:
             node.set("target", "y")
+        if self.invented:
+            node.set("invented", "y")
         if not self.isusable:
             node.set("unusable", "y")
         if self.radeg != 0.0:
@@ -76,9 +80,10 @@ class ObjLoc(object):
             xmlutil.savedata(doc, node, "name", self.name)
         if len(self.dispname) != 0:
             xmlutil.savedata(doc, node, "dispname", self.dispname)
+        xmlutil.savedata(doc, node, "apsize", self.apsize)
 
 
-class ObjLocs(object):
+class ObjLocs:
     """A class for grouping the above"""
 
     def __init__(self, remfitsobj=None):
@@ -94,7 +99,7 @@ class ObjLocs(object):
 
     def add_loc(self, objd):
         """Add objdata to location"""
-        r = ObjLoc(radeg=objd.ra, decdeg=objd.dec, name=objd.objname, dispname=objd.dispname, istarget=objd.is_target())
+        r = ObjLoc(radeg=objd.ra, decdeg=objd.dec, name=objd.objname, dispname=objd.dispname, istarget=objd.is_target(), apsize=objd.apsize, isusable=objd.usable, invented=objd.invented)
         self.resultlist.append(r)
 
     def results(self):
@@ -129,9 +134,8 @@ class ObjLocs(object):
             c, r = cr
             if c < 0 or r < 0 or c > pixcols or r > pixrows:
                 continue
-            else:
-                c = int(round(c))
-                r = int(round(r))
+            c = int(round(c))
+            r = int(round(r))
             res.col = c
             res.row = r
             result.append(res)
@@ -195,4 +199,4 @@ def save_objlist_to_file(results, filename, force=False):
         results.save(doc, root, "LOCS")
         xmlutil.complete_save(filename, doc)
     except xmlutil.XMLError as e:
-        raise ObjLocErr("Save of " + fname + " gave " + e.args[0])
+        raise ObjLocErr("Save of " + filename + " gave " + e.args[0])

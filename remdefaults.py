@@ -1,17 +1,16 @@
-# Save options in home control file for later recovery
+"""Default settings for REM programs"""
 
+import datetime
 import os
 import os.path
-import sys
 import dbops
-import datetime
+
 import miscutils
 import numpy as np
 
 
-class RemDefError:
+class RemDefError(Exception):
     """Throw if we hit some kind of error"""
-    pass
 
 
 my_database = None
@@ -32,7 +31,7 @@ regeom_config = (dict(z=(138, 42, 944, 960), r=(1138, 48, 910, 958), i=(62, 1112
                  dict(z=(80, 0, 914, 960), r=(1140, 2, 908, 954), i=(80, 1104, 912, 936), g=(1148, 1054, 900, 952)))
 
 
-def get_geom(datet, filter):
+def get_geom(datet, filt):
     """Get geometry as tuple startx, starty, columns, rows corresponding to date and filter"""
 
     t = datet.date()
@@ -40,12 +39,12 @@ def get_geom(datet, filter):
     for pd in reversed(regeom_dates):
         if t >= pd:
             try:
-                return regeom_config[p][filter]
+                return regeom_config[p][filt]
             except KeyError:
                 return (0, 0, 512, 512)
         p -= 1
     try:
-        return regeom_config[0][filter]
+        return regeom_config[0][filt]
     except KeyError:
         return (0, 0, 512, 512)
 
@@ -56,9 +55,9 @@ def default_database():
     try:
         return os.environ["REMDB"]
     except KeyError:
-        pass;
+        pass
     hostn = os.uname().nodename
-    if hostn == "lexi" or hostn == "nancy" or hostn == "foxy" :
+    if hostn in ("lexi", "nancy", "foxy"):
         return "remfits"
     if hostn == "uhhpc":
         return "cluster"
@@ -124,6 +123,8 @@ def getargs(resargs):
 def opendb():
     """Open database and return tuple dbase connection and cursor"""
     global my_database
+    if my_database is None:
+        my_database = default_database()
     dbase = dbops.opendb(my_database)
     dbcurs = dbase.cursor()
     return (dbase, dbcurs)
@@ -150,18 +151,18 @@ def libfile(name):
 
 
 def tally_file(name):
-     """Get the location of a tally file of given name"""
-     return libfile(miscutils.replacesuffix(name, ".tally"))
+    """Get the location of a tally file of given name"""
+    return libfile(miscutils.replacesuffix(name, ".tally"))
 
 
 def fitsid_file(name):
-     """Get the location of a fitsids file of given name"""
-     return libfile(miscutils.replacesuffix(name, ".fitsids"))
+    """Get the location of a fitsids file of given name"""
+    return libfile(miscutils.replacesuffix(name, ".fitsids"))
 
 
 def meanstd_file(name):
-     """Get the location of a mean/std file of given name"""
-     return libfile(miscutils.replacesuffix(name, ".meanstd"))
+    """Get the location of a mean/std file of given name"""
+    return libfile(miscutils.replacesuffix(name, ".meanstd"))
 
 
 def bad_pixmask(name):
