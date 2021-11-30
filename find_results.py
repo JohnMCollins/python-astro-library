@@ -2,10 +2,10 @@
 
 import os.path
 import xml.etree.ElementTree as ET
-import datetime
 import numpy as np
 import xmlutil
 import remdefaults
+import objdata
 
 # import sys
 
@@ -14,6 +14,20 @@ FINDRES_DOC_ROOT = "Findres"
 
 class FindResultErr(Exception):
     """"Throw if error faound"""
+
+
+Field_names = dict(radeg=xmlutil.getfloat,
+                   decdeg=xmlutil.getfloat,
+                   col=xmlutil.getint,
+                   row=xmlutil.getint,
+                   apsize=xmlutil.getint,
+                   name=xmlutil.gettext,
+                   dispname=xmlutil.gettext,
+                   label=xmlutil.gettext,
+                   adus=xmlutil.getfloat)
+
+for filtname in objdata.Possible_filters:
+    Field_names[filtname + "mag"] = xmlutil.getfloat
 
 
 class FindResult:
@@ -32,6 +46,13 @@ class FindResult:
         self.istarget = istarget
         self.invented = invented
         self.isusable = isusable
+        self.needs_correction = False
+        for f in objdata.Possible_filters:
+            setattr(self, f + "mag", None)
+
+    def not_identified(self):
+        """Return if no identification"""
+        return  len(self.name) == 0
 
     def resetapsize(self, apsize=0, row=0, col=0, adus=0.0):
         """Reset result after recalculating aperture"""
@@ -58,27 +79,13 @@ class FindResult:
         self.istarget = node.get("target", "n") == 'y'
         self.invented = node.get("invented", "n") == 'y'
         self.isusable = node.get("unusable", 'n') != 'y'
+        self.needs_correction = node.get("needsc", 'n') != 'y'
         for child in node:
-            tagn = child.tag
-            if tagn == "radeg":
-                self.radeg = xmlutil.getfloat(child)
-            elif tagn == "decdeg":
-                self.decdeg = xmlutil.getfloat(child)
-            elif tagn == "col":
-                self.col = xmlutil.getint(child)
-            elif tagn == "row":
-                self.row = xmlutil.getint(child)
-            elif tagn == "apsize":
-                self.apsize = xmlutil.getint(child)
-            elif tagn == "name":
-                self.name = xmlutil.gettext(child)
-            elif tagn == "dispname":
-                self.dispname = xmlutil.gettext(child)
-            elif tagn == "label":
-                self.label = xmlutil.gettext(child)
-            elif tagn == "adus":
-                self.adus = xmlutil.getfloat(child)
-        if len(self.dispname) == 0 and self.name != 0:
+            try:
+                setattr(self, child.tag, Field_names[child.tag](child))
+            except KeyError:
+                pass
+        if len(self.dispname) == 0 and len(self.name) != 0:
             self.dispname = self.name
 
     def save(self, doc, pnode, name):
@@ -90,24 +97,20 @@ class FindResult:
             node.set("invented", 'y')
         if not self.isusable:
             node.set("unusable", "y")
-        if self.radeg != 0.0:
-            xmlutil.savedata(doc, node, "radeg", self.radeg)
-        if self.decdeg != 0.0:
-            xmlutil.savedata(doc, node, "decdeg", self.decdeg)
-        if self.col is not None:
-            xmlutil.savedata(doc, node, "col", self.col)
-        if self.row is not None:
-            xmlutil.savedata(doc, node, "row", self.row)
-        if self.apsize != 0:
-            xmlutil.savedata(doc, node, "apsize", self.apsize)
-        if len(self.name) != 0:
-            xmlutil.savedata(doc, node, "name", self.name)
-        if len(self.dispname) != 0:
-            xmlutil.savedata(doc, node, "dispname", self.dispname)
-        if len(self.label) != 0:
-            xmlutil.savedata(doc, node, "label", self.label)
-        if self.adus != 0.0:
-            xmlutil.savedata(doc, node, "adus", self.adus)
+        if self.needs_correction:
+            node.set("needsc", "y")
+        for k in Field_names.keys():
+            v = getattr(self, k, None)
+            if v is not None and (not isinstance(v, str) or len(v) != 0):
+                xmlutil.savedata(doc, node, k, v)
+
+
+Fr_fields = dict(obsdate=xmlutil.getdatetime,
+                 nrows=xmlutil.getint,
+                 ncols=xmlutil.getint,
+                 filter=xmlutil.gettext,
+                 signif=xmlutil.getfloat,
+                 totsignif=xmlutil.getfloat)
 
 
 class FindResults:
@@ -119,18 +122,36 @@ class FindResults:
         self.remfitsobj = remfitsobj
         self.obsdate = None
         self.filter = None
+        self.nrows = None
+        self.ncols = None
         self.totsignif = None
         self.signif = None
+        self.objdict = dict()
         try:
             self.filter = remfitsobj.filter
             self.obsdate = remfitsobj.date
+            self.nrows, self.ncols = remfitsobj.data.shape
         except AttributeError:
             pass
+
+    def num_results(self, idonly=False):
+        """Return number of find results, if idonly is True, limit to ones identified"""
+        if idonly:
+            return len([r for r in self.resultlist if len(r.name) != 0])
+        return  len(self.resultlist)
 
     def results(self):
         """Generator for result list"""
         for r in self.resultlist:
             yield r
+
+    def __getitem__(self, k):
+        try:
+            if isinstance(k, str):
+                return  self.objdict[k]
+            return self.resultlist[k]
+        except (IndexError, KeyError):
+            raise FindResultErr("Cannot find item " + str(k) + " in find results")
 
     def tooclose(self, row, col, existing):
         """Reject possible if too close to existing one"""
@@ -146,10 +167,18 @@ class FindResults:
         base = ord('A')
         for r in self.resultlist:
             l = chr(base + n % 26)
-            if n > 26:
+            if n >= 26:
                 l += str(n // 26)
             r.label = l
             n += 1
+
+    def rekey(self):
+        """Recreate the lookup table"""
+        self.objdict = dict()
+        for r in self.results():
+            if len(r.name) != 0:
+                self.objdict[r.name] = r
+            self.objdict[r.label] = r
 
     def reorder(self):
         """Reorder fesult list to take account of changed aperture/results"""
@@ -248,6 +277,7 @@ class FindResults:
         if len(self.resultlist) != 0:
             self.calccoords()
             self.relabel()
+        self.rekey()
 
         self.signif = sign
         self.totsignif = totsign
@@ -302,6 +332,8 @@ class FindResults:
         maxcol = pixcols - apdiam  # This is actually 1 more
 
         maxaduc = -1e6  # Hopefully anything will beat this
+        colmaxadu = scol
+        rowmaxadu = srow
 
         for rs in range(max(minrow, srow - maxshift), min(maxrow, srow + maxshift)):
             for cs in range(max(mincol, scol - maxshift), min(maxcol, scol + maxshift)):
@@ -310,12 +342,24 @@ class FindResults:
                     maxaduc = adu
                     rowmaxadu = rs
                     colmaxadu = cs
+        if maxaduc < 0.0:
+            maxaduc = np.sum(np.roll(np.roll(mask, shift=scol - apsize, axis=1), shift=srow - apsize, axis=0) * imagedata)
         return  (colmaxadu, rowmaxadu, maxaduc, np.sum(mask))
+
+    def overlap_check(self):
+        """Check for overlaps in find results"""
+        pixpos = np.array([complex(r.col, r.row) for r in self.results()])
+        distmat = np.abs(np.subtract.outer(pixpos, pixpos))
+        aplist = [r.apsize for r in self.results()]
+        apcomp = np.add.outer(aplist, aplist)
+        rows, cols = np.where((distmat - apcomp) < 0)
+        return [(r, c) for r, c in zip(rows, cols) if r < c ]
 
     def load(self, node):
         """Load up from XML dom"""
 
         self.obsdate = None
+        self.nrows = self.ncols = None
         self.filter = None
         self.resultlist = []
         self.signif = None
@@ -323,35 +367,27 @@ class FindResults:
 
         for child in node:
             tagn = child.tag
-            if tagn == "obsdate":
-                self.obsdate = datetime.datetime.fromisoformat(xmlutil.gettext(child))
-            elif tagn == 'filter':
-                self.filter = xmlutil.gettext(child)
-            elif tagn == "results":
-                for gc in child:
-                    fr = FindResult()
-                    fr.load(gc)
-                    self.resultlist.append(fr)
-            elif tagn == "signif":
-                self.signif = xmlutil.getfloat(child)
-            elif tagn == "totsignif":
-                self.totsignif = xmlutil.getfloat(child)
+            try:
+                setattr(self, tagn, Fr_fields[tagn](child))
+            except KeyError:
+                if tagn == "results":
+                    for gc in child:
+                        fr = FindResult()
+                        fr.load(gc)
+                        self.resultlist.append(fr)
+        self.rekey()
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
         node = ET.SubElement(pnode, name)
-        if self.obsdate is not None:
-            xmlutil.savedata(doc, node, "obsdate", self.obsdate.isoformat())
-        if self.filter is not None:
-            xmlutil.savedata(doc, node, "filter", self.filter)
+        for k in Fr_fields.keys():
+            v = getattr(self, k, None)
+            if v is not None:
+                xmlutil.savedata(doc, node, k, v)
         if len(self.resultlist) != 0:
             gc = ET.SubElement(node, "results")
             for fr in self.results():
                 fr.save(doc, gc, "result")
-        if self.signif is not None:
-            xmlutil.savedata(doc, node, "signif", self.signif)
-        if self.totsignif is not None:
-            xmlutil.savedata(doc, node, "totsignif", self.totsignif)
 
 
 def load_results_from_file(fname, fitsobj=None):

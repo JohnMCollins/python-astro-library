@@ -1,11 +1,10 @@
 # Arg parsing for selecting obs or daily flat/bias
 
-# import sys
+"""Parsing possible fields of observations and daily flat/bias"""
 
 
 class RemFieldError(Exception):
     """Throw this to indicate error in pair parse"""
-    pass
 
 # Table of argument names descriptions and database field names
 
@@ -78,8 +77,10 @@ def get_extended_args(resargs, tab, prefix, fieldselect, needextra=False):
         noextra_mainsel.append("0")
         innersel.append("AVG(" + dbf + ") AS mean_" + dbf)
         innersel.append("STD(" + dbf + ") AS std_" + dbf)
-        if parsepair(resargs, "nstd_" + argn, havingcl, "ns_" + dbf): extrafields += 1
-        if parsepair(resargs, "abs_nstd_" + argn, havingcl, "absns_" + dbf): extrafields += 1
+        if parsepair(resargs, "nstd_" + argn, havingcl, "ns_" + dbf):
+            extrafields += 1
+        if parsepair(resargs, "abs_nstd_" + argn, havingcl, "absns_" + dbf):
+            extrafields += 1
         matchtab.append("std_" + dbf + "!=0")
 
     resselstr = prefix

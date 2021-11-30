@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import xmlutil
 import remdefaults
+import objdata
 # import sys
 
 OBJLOC_DOC_ROOT = "Objloc"
@@ -13,6 +14,17 @@ OBJLOC_DOC_ROOT = "Objloc"
 
 class ObjLocErr(Exception):
     """"Throw if error faound"""
+
+
+ObjLoc_fields = dict(radeg=xmlutil.getfloat,
+                     decdeg=xmlutil.getfloat,
+                     col=xmlutil.getint,
+                     row=xmlutil.getint,
+                     name=xmlutil.gettext,
+                     dispname=xmlutil.gettext,
+                     apsize=xmlutil.getint)
+for filtname in objdata.Possible_filters:
+    ObjLoc_fields[filtname + "mag"] = xmlutil.getfloat
 
 
 class ObjLoc:
@@ -29,6 +41,8 @@ class ObjLoc:
         self.istarget = istarget
         self.invented = invented
         self.isusable = isusable
+        for f in objdata.Possible_filters:
+            setattr(self, f + "mag", None)
 
     def load(self, node):
         """Load from XNK dom"""
@@ -39,25 +53,17 @@ class ObjLoc:
         self.name = ""
         self.dispname = ""
         self.apsize = 6
+        for f in objdata.Possible_filters:
+            setattr(self, f + "mag", None)
         self.istarget = node.get("target", 'n') == 'y'
         self.invented = node.get("invented", 'n') == 'y'
         self.isusable = node.get("unusable", 'n') != 'y'
         for child in node:
             tagn = child.tag
-            if tagn == "radeg":
-                self.radeg = xmlutil.getfloat(child)
-            elif tagn == "decdeg":
-                self.decdeg = xmlutil.getfloat(child)
-            elif tagn == "col":
-                self.col = xmlutil.getint(child)
-            elif tagn == "row":
-                self.row = xmlutil.getint(child)
-            elif tagn == "name":
-                self.name = xmlutil.gettext(child)
-            elif tagn == "dispname":
-                self.dispname = xmlutil.gettext(child)
-            elif tagn == "apsize":
-                self.apsize = xmlutil.getint(child)
+            try:
+                setattr(self, tagn, ObjLoc_fields[tagn](child))
+            except KeyError:
+                pass
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
@@ -68,19 +74,24 @@ class ObjLoc:
             node.set("invented", "y")
         if not self.isusable:
             node.set("unusable", "y")
-        if self.radeg != 0.0:
-            xmlutil.savedata(doc, node, "radeg", self.radeg)
-        if self.decdeg != 0.0:
-            xmlutil.savedata(doc, node, "decdeg", self.decdeg)
-        if self.col is not None:
-            xmlutil.savedata(doc, node, "col", self.col)
-        if self.row is not None:
-            xmlutil.savedata(doc, node, "row", self.row)
-        if len(self.name) != 0:
-            xmlutil.savedata(doc, node, "name", self.name)
-        if len(self.dispname) != 0:
-            xmlutil.savedata(doc, node, "dispname", self.dispname)
-        xmlutil.savedata(doc, node, "apsize", self.apsize)
+        for k in ObjLoc_fields.keys():
+            try:
+                val = getattr(self, k)
+            except AttributeError:
+                continue
+            if val is None:
+                continue
+            proc = ObjLoc_fields[k]
+            if proc == xmlutil.getfloat:
+                if val == 0.0:
+                    continue
+            elif proc == xmlutil.getint:
+                if val == 0:
+                    continue
+            elif proc == xmlutil.gettext:
+                if len(val) == 0:
+                    continue
+            xmlutil.savedata(doc, node, k, val)
 
 
 class ObjLocs:
@@ -100,6 +111,11 @@ class ObjLocs:
     def add_loc(self, objd):
         """Add objdata to location"""
         r = ObjLoc(radeg=objd.ra, decdeg=objd.dec, name=objd.objname, dispname=objd.dispname, istarget=objd.is_target(), apsize=objd.apsize, isusable=objd.usable, invented=objd.invented)
+        for f in objdata.Possible_filters:
+            mag = f + "mag"
+            val = getattr(objd, mag, None)
+            if val is not None:
+                setattr(r, mag, val)
         self.resultlist.append(r)
 
     def results(self):

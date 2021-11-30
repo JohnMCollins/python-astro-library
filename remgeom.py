@@ -2,6 +2,7 @@
 
 import sys
 import copy
+import os
 import xml.etree.ElementTree as ET
 import xmlutil
 import configfile
@@ -347,7 +348,7 @@ class greyscale:
         else:
             vals = np.concatenate(((data.min(),), vals))
         if data.max() < vals[-1]:
-            vals = np.concatenate((vals, (vals[-1 * 2 - vals[-2], ])))
+            vals = np.concatenate((vals, (vals[-1] * 2 - vals[-2],)))
         else:
             vals = np.concatenate((vals, (data.max(),)))
         return vals
@@ -417,6 +418,7 @@ class RemGeom:
         self.shades = dict()
         self.greyscales = dict()
         self.defgreyscale = None
+        plt.rcParams['savefig.directory'] = os.getcwd()
 
     def list_altfmts(self):
         """Get a list of alternative formats"""

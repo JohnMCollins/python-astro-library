@@ -1,16 +1,14 @@
-# @Author: John M Collins <jmc>
-# @Date:   2018-06-25T21:17:41+01:00
-# @Email:  jmc@toad.me.uk
-# @Filename: dbobjinfo.py
-# @Last modified by:   jmc
-# @Last modified time: 2018-12-17T22:48:34+00:00
-
 """outines for object info database"""
 
+import xml.etree.ElementTree as ET
+import datetime
+import os.path
 from astropy.time import Time
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 import pymysql
+import remdefaults
+import xmlutil
 
 DEFAULT_APSIZE = 6
 Possible_filters = 'girzHJK'
@@ -20,16 +18,22 @@ class  ObjDataError(Exception):
     """Class to report errors concerning individual objects"""
 
 
-def get_objname(dbcurs, alias):
-    """Return unchanged name if if a main object name, otherwise find object name from alias"""
-    dbcurs.execute("SELECT COUNT(*) FROM objdata WHERE objname=%s", alias)
+def get_objname(dbcurs, alias, allobj=False):
+    """Return unchanged name if if a main object name, otherwise find object name from alias ignoring suppressed objects unless allobj set"""
+    dbcurs.execute("SELECT objname,suppress FROM objdata WHERE objname=%s", alias)
     f = dbcurs.fetchall()
-    if f[0][0] != 0:
+    if len(f) > 0:
+        name, supp = f[0]
+        if supp and not allobj:
+            raise ObjDataError("Known but suppressed", alias)
         return alias
-    dbcurs.execute("SELECT objname FROM objalias WHERE alias=%s", alias)
+    dbcurs.execute("SELECT objdata.objname,suppress FROM objalias INNER JOIN objdata WHERE objdata.objname=objalias.objname AND alias=%s", alias)
     f = dbcurs.fetchall()
     try:
-        return  f[0][0]
+        name, supp = f[0]
+        if supp and not allobj:
+            raise ObjDataError("Aliased to " + name + " but is suppressed", alias)
+        return  name
     except IndexError:
         raise ObjDataError("Unknown object or alias name", alias)
 
@@ -147,21 +151,26 @@ class ObjData:
         self.apsize = DEFAULT_APSIZE
         self.invented = False
         self.usable = True
+        self.suppress = False
 
-    def get(self, dbcurs, name=None):
+    def get(self, dbcurs, name=None, allobj=False):
         """Get object by name"""
 
         if name is None:
             name = self.objname
             if name is None:
                 raise ObjDataError("No name supplied for ObjData", "")
-        dbcurs.execute("SELECT objname,objtype,dispname,vicinity,dist,rv,radeg,decdeg,rapm,decpm,gmag,imag,rmag,zmag,Hmag,Jmag,Kmag,apsize,invented,usable FROM objdata WHERE objname=%s", get_objname(dbcurs, name))
+        if allobj:
+            extra = ""
+        else:
+            extra = "suppress=0 AND "
+        dbcurs.execute("SELECT objname,objtype,dispname,vicinity,dist,rv,radeg,decdeg,rapm,decpm,gmag,imag,rmag,zmag,Hmag,Jmag,Kmag,apsize,invented,usable,suppress FROM objdata WHERE " + extra + "objname=%s", get_objname(dbcurs, name, allobj=allobj))
         f = dbcurs.fetchall()
         if len(f) != 1:
             if len(f) == 0:
                 raise ObjDataError("(warning) Object not found", name)
             raise ObjDataError("Internal problem too many objects with name", name)
-        self.objname, self.objtype, self.dispname, self.vicinity, self.dist, self.rv, self.ra, self.dec, self.rapm, self.decpm, self.gmag, self.imag, self.rmag, self.zmag, self.Hmag, self.Jmag, self.Kmag, self.apsize, self.invented, self.usable = f[0]
+        self.objname, self.objtype, self.dispname, self.vicinity, self.dist, self.rv, self.ra, self.dec, self.rapm, self.decpm, self.gmag, self.imag, self.rmag, self.zmag, self.Hmag, self.Jmag, self.Kmag, self.apsize, self.invented, self.usable, self.suppress = f[0]
 
     def is_target(self):
         """Report if it's the target by comparing with vicinity"""
@@ -339,6 +348,8 @@ class ObjData:
             raise ObjDataError("No coordinates found in objdata for", self.objname)
         if self.rapm is None or self.decpm is None:
             return
+        if isinstance(obstime, datetime.date):
+            obstime = datetime.datetime(obstime.year, obstime.month, obstime.day, 12, 0, 0)
         args = dict(ra=self.ra * u.deg, dec=self.dec * u.deg, obstime=Time('J2000'), pm_ra_cosdec=self.rapm * u.mas / u.yr, pm_dec=self.decpm * u.mas / u.yr)
         if self.dist is not None:
             args['distance'] = self.dist * u.lightyear
@@ -356,7 +367,7 @@ def get_objects(dbcurs, vicinity, obstime=None):
     Adjust for time if specified"""
 
     targname = get_objname(dbcurs, vicinity)  # Might give error if unknown
-    dbcurs.execute("SELECT objname FROM objdata WHERE vicinity=%s", targname)
+    dbcurs.execute("SELECT objname FROM objdata WHERE suppress=0 AND vicinity=%s", targname)
     onames = dbcurs.fetchall()
 
     results = []
@@ -386,3 +397,203 @@ def prune_objects(objlist, ras, decs):
     mindec = min(decs)
     maxdec = max(decs)
     return [o for o in objlist if minra <= o.ra <= maxra and mindec <= o.dec <= maxdec]
+
+
+Cached_fields = dict(objname=xmlutil.gettext, dispname=xmlutil.gettext, vicinity=xmlutil.gettext, objtype=xmlutil.gettext,
+                     ra=xmlutil.getfloat, dec=xmlutil.getfloat, dist=xmlutil.getfloat,
+                     origra=xmlutil.getfloat, origdec=xmlutil.getfloat, origdist=xmlutil.getfloat,
+                     rv=xmlutil.getfloat, rapm=xmlutil.getfloat, decpm=xmlutil.getfloat, apsize=xmlutil.getint)
+for possf in Possible_filters:
+    Cached_fields[possf + 'mag'] = xmlutil.getfloat
+
+
+class Cached_ObjData(ObjData):
+    """Form of objdata for when we are caching to file"""
+
+    def __init__(self, objname=None, objtype=None, dispname=None):
+
+        super().__init__(objname, objtype, dispname)
+        self.origra = None
+        self.origdec = None
+        self.origdist = None
+
+    def get(self, dbcurs, name=None):
+        """Revised get to remember initial ra and dec"""
+        ObjData.get(self, dbcurs, name)
+        self.origra = self.ra
+        self.origdec = self.dec
+        self.origdist = self.dist
+
+    def apply_motion(self, obstime):
+        """Apply motion reseting to orignial ra/dec first"""
+        self.ra = self.origra
+        self.dec = self.origdec
+        self.dist = self.origdist
+        ObjData.apply_motion(self, obstime)
+
+    def in_region(self, minra, maxra, mindec, maxdec):
+        """Check if object is in region"""
+        return  minra <= self.ra <= maxra and mindec <= self.dec <= maxdec
+
+    def load(self, node):
+        """Load an object from XML file"""
+        self.objname = self.dispname = self.vicinity = self.objtype = None
+        self.dist = self.rv = self.ra = self.dec = self.dist = None
+        self.origra = self.origdec = self.origdist = None
+        self.rapm = self.decpm = None
+        for f in Possible_filters:
+            setattr(self, f + 'mag', None)
+        self.apsize = DEFAULT_APSIZE
+        self.invented = node.get("invented", 'n') == 'y'
+        self.usable = node.get("unusable", 'n') != 'y'
+        for child in node:
+            try:
+                setattr(self, child.tag, Cached_fields[child.tag](child))
+            except KeyError:
+                pass
+
+    def save(self, doc, pnode, name):
+        """Save to XML DOM node"""
+        node = ET.SubElement(pnode, name)
+        if self.invented:
+            node.set("invented", 'y')
+        if not self.usable:
+            node.set("unusable", "y")
+        for k in Cached_fields.keys():
+            v = getattr(self, k, None)
+            if v is not None:
+                xmlutil.savedata(doc, node, k, v)
+
+
+CACHEDOBJ_DOC_ROOT = "Cachedobj"
+
+
+class Cached_Objlist:
+    """Cached list of objects with tracking of dates"""
+
+    def __init__(self, vicinity=None):
+        self.fullcalc_date = None
+        self.objlist = []
+        self.vicinity = vicinity
+
+    def numobjs(self):
+        """Return number of objects"""
+        return  len(self.objlist)
+
+    def get_all(self, dbcurs, opdate, vicinity=None):
+        """Get all objects from database to kick off with"""
+
+        if vicinity is not None:
+            self.vicinity = vicinity
+        try:
+            dbcurs.execute("SELECT objname FROM objdata WHERE suppress=0 AND vicinity=%s", get_objname(dbcurs, self.vicinity))
+        except pymysql.MySQLError:
+            raise ObjDataError("Invalid get all - is vicinity set right", "")
+        self.objlist = []
+        for obj, in dbcurs.fetchall():
+            st = Cached_ObjData(obj)
+            st.get(dbcurs)
+            self.objlist.append(st)
+        for obj in self.objlist:
+            obj.apply_motion(opdate)
+        self.fullcalc_date = opdate
+
+    def prune_region(self, ras, decs):
+        """Prune result to ones in region"""
+        minra = min(ras)
+        maxra = max(ras)
+        mindec = min(decs)
+        maxdec = max(decs)
+        self.objlist = [o for o in self.objlist if o.in_region(minra, maxra, mindec, maxdec)]
+        return self
+
+    def adjust_proper_motions(self, newdate):
+        """Adjust for proper motions"""
+        difft = newdate - self.fullcalc_date.date()
+        nyears = difft.days / 365.25
+        newtime = newdate + difft
+        for obj in self.objlist:
+            if obj.rapm is None or obj.decpm is None:
+                continue
+            if abs(obj.rapm * nyears) >= 0.5 or abs(obj.decpm * nyears) >= 0.5:
+                obj.apply_motion(newtime)
+
+    def load(self, node):
+        """Load from an XML DOM node"""
+        self.fullcalc_date = None
+        self.vicinity = None
+        self.objlist = []
+        for child in node:
+            tagn = child.tag
+            if tagn == "objs":
+                for gc in child:
+                    cobj = Cached_ObjData()
+                    cobj.load(gc)
+                    self.objlist.append(cobj)
+            elif tagn == "calcdate":
+                self.fullcalc_date = datetime.datetime.fromisoformat(xmlutil.gettext(child))
+            elif tagn == "vicinity":
+                self.vicinity = xmlutil.gettext(child)
+
+    def save(self, doc, pnode, name):
+        """Save to XML DOM node"""
+        node = ET.SubElement(pnode, name)
+        if self.fullcalc_date is not None:
+            xmlutil.savedata(doc, node, "calcdate", self.fullcalc_date.isoformat())
+        if self.vicinity is not None:
+            xmlutil.savedata(doc, node, "vicinity", self.vicinity)
+        if len(self.objlist) != 0:
+            gc = ET.SubElement(node, "objs")
+            for obj in self.objlist:
+                obj.save(doc, gc, "object")
+
+
+def load_cached_objs_from_file(fname):
+    """Load cached objs text file"""
+    try:
+        doc, root = xmlutil.load_file(fname, CACHEDOBJ_DOC_ROOT)
+        cobj = Cached_Objlist()
+        conode = root.find("OBJL")
+        if conode is None:
+            raise xmlutil.XMLError("No tree")
+        cobj.load(conode)
+    except xmlutil.XMLError as e:
+        raise ObjDataError("Load of " + fname + " gave", e.args[0])
+    return  cobj
+
+
+def save_cached_objs_to_file(catchedobjs, filename):
+    """Save results to results text file"""
+    try:
+        doc, root = xmlutil.init_save(CACHEDOBJ_DOC_ROOT, CACHEDOBJ_DOC_ROOT)
+        catchedobjs.save(doc, root, "OBJL")
+        xmlutil.complete_save(filename, doc)
+    except xmlutil.XMLError as e:
+        raise ObjDataError("Save of " + filename + " gave", e.args[0])
+
+
+def get_sky_region(dbcurs, obj, datet, ras, decs):
+    """Get region of sky using cache"""
+    date = datet
+    if isinstance(date, datetime.datetime):
+        date = date.date()
+    map_for_date = remdefaults.skymap_file(obj, date)
+    if os.path.exists(map_for_date):
+        result = load_cached_objs_from_file(map_for_date)
+    else:
+        nearest = remdefaults.nearest_skymap_file(obj, date)
+        if nearest is None:
+            result = Cached_Objlist(obj)
+            result.get_all(dbcurs, date)
+        else:
+            nearest_file, nearest_date = nearest
+            if abs((nearest_date - date).days) >= 365:
+                result = Cached_Objlist(obj)
+                result.get_all(dbcurs, date)
+            else:
+                result = load_cached_objs_from_file(nearest_file)
+                result.adjust_proper_motions(nearest_date)
+
+        save_cached_objs_to_file(result, map_for_date)
+
+    return  result.prune_region(ras, decs)

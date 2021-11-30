@@ -58,13 +58,19 @@ def allocate_locs(locresults, findresults, threshold=20.0, nocheck=False):
     scols = set(hadcols)
 
     if len(hadcols) != len(set(hadcols)):
-        dupc = []
-        for c in hadcols:
-            if c not in scols:
-                dupc.append(c)
-            scols.discard(c)
-        dupc.sort()
-        raise FindError("Duplicated cols", dupc)
+        newrtab = []
+        for row, col, dist in rtab:
+            if col not in scols:
+                continue
+            rows = [c[0] for c in rtab if c[1] == col]
+            if len(rows) != 1:
+                dists = np.array([c[2] for c in rtab if c[1] == col])
+                am = dists.argmin()
+                newrtab.append((rows[am], col, dists[am]))
+            else:
+                newrtab.append((row, col, dist))
+            scols.discard(col)
+        rtab = newrtab
 
     hadrows = [p[0] for p in rtab]
     srows = set(hadrows)

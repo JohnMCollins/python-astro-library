@@ -1,11 +1,13 @@
 # Get FITS file from REM archives as byte string stream
 
-import pycurl
+"""Routines for fetching FITS files"""
+
 import io
+import pycurl
 
 
 class RemGetError(Exception):
-    pass
+    """Throw this exception if we have trouble"""
 
 
 root_url = 'http://ross.iasfbo.inaf.it'

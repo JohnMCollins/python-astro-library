@@ -16,7 +16,9 @@ for k, v in filtfn.items():
 fmtch = re.compile('([FBImCR]).*([UB][LR])')
 
 # Second element tells us whether to look for coords
-ftypes = dict(F=('Daily flat', False), B=('Daily bias', False), I=('Image', True), m=('Master', False), C=('Combined bias', False), R=('Combined flat', False))
+ftypes = dict(F=('Daily flat', False), B=('Daily bias', False), I=('Image', True), m=('Master', False), C=('Combined bias', False), G=('Generated flat', False))
+
+remir_types = frozenset(['H', 'J', 'K', 'GRI'])
 
 
 class RemFitsErr(Exception):
@@ -118,6 +120,12 @@ class RemFitsHdr:
                 self.endy = self.nrows = hdr['NAXIS2']
             except KeyError:
                 raise RemFitsErr("Dimensions of data not given in FITS header")
+        elif self.filter in remir_types:
+            self.description = "REMIR Image file dated " + dfmtd
+            self.ftype = 'Image'
+            self.startx = self.starty = 0
+            self.endx = self.endy = 512
+            getwcs = True
         else:
             try:
                 ifname = hdr['FILENAME']
@@ -128,7 +136,10 @@ class RemFitsHdr:
             if mtches is None:
                 if self.filter is None:
                     raise RemFitsErr("No filter given and no decipherable filename")
-                self.ftype = 'Processed image'
+                try:
+                    self.ftype = ftypes[ifname[0]][0]
+                except KeyError:
+                    self.ftype = 'Processed image'
                 getwcs = True
             else:
                 ft, quad = mtches.groups()
@@ -207,11 +218,11 @@ class RemFits(RemFitsHdr):
     def load_from_fits(self, fname):
         """Load and fill up from specified file"""
         try:
-            ff = fits.open(miscutils.replacesuffix(fname, 'fits.gz'))
+            ff = fits.open(miscutils.addsuffix(fname, 'fits.gz'))
         except OSError as e:
             if e.strerror is None:
                 raise RemFitsErr(fname + " is not a valid FITS file")
-            raise RemFitsErr("Open of " + fname + " gave error " + e.strerror)
+            raise RemFitsErr("Open of " + fname + " (" + e.filename + ") gave error " + e.strerror)
         self.init_from(ff[0].header, ff[0].data)
         ff.close()
 
@@ -224,7 +235,7 @@ class RemFits(RemFitsHdr):
         hdr, data = fitsops.mem_get(ffmem)
         if hdr is None or data is None:
             raise RemFitsErr("Could not fetch obsind=$d" % obsind)
-        self.init_from(hdr, data)  # # FIXME to cope with REMIR
+        self.init_from(hdr, data)
         self.from_obsind = obsind
 
     def load_from_iforbind(self, dbcurs, iforbind):

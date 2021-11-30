@@ -1,6 +1,7 @@
 # Operations on FITS files
 
-import os
+"""Operations on FITS files"""
+
 import gzip
 import io
 from astropy.io import fits

@@ -19,23 +19,28 @@ def removesuffix(st, suff=None, allsuff=False):
     """Remove the specified suffix or any suffix if none specified
        If allsuff is true, remove all or all matching suffixes"""
 
-    # Get rid of leading dots in suffice
-
+    # Get rid of leading dots in suffices and trailing on string
+    
+    while len(st) > 0  and  st[-1] == '.':
+        st = st[:-1]
     if suff is not None:
         while len(suff) > 0 and suff[0] == '.':
             suff = suff[1:]
-        if len(suff) == 0:
-            suff = None
+        suff = '.' + suff
+        try:
+            p = st.rindex(suff)
+            if p + len(suff) >= len(st):
+                return  st[0:p]
+        except ValueError:
+            pass
+        return  st
+
     bits = st.split('.')
     if allsuff:
         while len(bits) > 1:
-            if suff is not None:
-                if suff != bits[-1]:
-                    break
             bits.pop()
     elif len(bits) > 1:
-        if suff is None or suff == bits[-1]:
-            bits.pop()
+        bits.pop()
     return '.'.join(bits)
 
 
@@ -48,7 +53,7 @@ def addsuffix(st, suff):
     return  st + suff
 
 
-def replacesuffix(st, new, old=None):
+def replacesuffix(st, new, old=None, allsuff=False):
     """Replace any suffix with the new one given"""
     # Cater for string having the desired suffix already, notably with .fits.gz
     if hassuffix(st, new):
@@ -58,4 +63,4 @@ def replacesuffix(st, new, old=None):
             new = '.' + new
     except IndexError:
         return  st
-    return removesuffix(st, old) + new
+    return removesuffix(st, old, allsuff) + new

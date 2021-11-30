@@ -1,21 +1,14 @@
-# @Author: John M Collins <jmc>
-# @Date:   2019-01-03T21:01:27+00:00
-# @Email:  jmc@toad.me.uk
-# @Filename: xmlutil.py
-# @Last modified by:   jmc
-# @Last modified time: 2019-01-03T22:29:14+00:00
-
-# XML Utility functions
+"""XML Utility functions"""
 
 import xml.etree.ElementTree as ET
-import string
+import datetime
 
 
 class XMLError(Exception):
     """Throw these errors if we get some value etc error"""
 
     def __init__(self, message, warningonly=False):
-        super(XMLError, self).__init__(message)
+        super().__init__(message)
         self.warningonly = warningonly
 
 
@@ -43,31 +36,40 @@ def getfloat(node):
 def getfloatlist(node):
     """Extract text field from XML node and make a list of floats out of it"""
     try:
-        return [float(x) for x in string.split(node.text, ",")]
+        return [float(x) for x in node.text.split(",")]
     except ValueError:
         raise XMLError("Invalid float list for " + node.tag)
+
+
+def getdatetime(node):
+    """Extract text field as ISO format date/time"""
+    try:
+        return datetime.datetime.fromisoformat(node.text)
+    except ValueError:
+        raise XMLError("Invalid date format for " + node.tag)
 
 
 def savedata(doc, pnode, name, value):
     """Encode something to an XML file"""
     subnode = ET.SubElement(pnode, name)
-    subnode.text = str(value)
+    if isinstance(value, datetime.date):
+        subnode.text = value.isoformat()
+    else:
+        subnode.text = str(value)
     return subnode
 
 
 def savefloatlist(doc, pnode, name, value):
     """Encode a list of floats to an XML file"""
     subnode = ET.SubElement(pnode, name)
-    if type(value) != 'float' and type(value) != 'int':
-        subnode.text = ','.join([str(x) for x in value])
-    else:
-        subnode.text = str(value)
+    subnode.text = ','.join([str(x) for x in value])
     return subnode
 
 
 def setboolattr(pnode, name, value):
     """Save a boolean attribute"""
-    if not value: return
+    if not value:
+        return
     pnode.set(name, 'y')
 
 
@@ -86,7 +88,8 @@ def savebool(doc, pnode, name, value):
 def find_child(pnode, name):
     """Find the first top-level child node of pnode of given name"""
     child = pnode.find(name)
-    if child is not None: return child
+    if child is not None:
+        return child
     raise XMLError("Could not find element '" + name + "'")
 
 

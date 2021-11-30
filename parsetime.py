@@ -1,4 +1,4 @@
-# Parse time and date string in various formats
+"""Parse time and date string in various formats"""
 
 import datetime
 import re
@@ -32,9 +32,7 @@ def parsetime(arg, atend=False):
         else:
             usec = int(round(float(dparts[-1]) * 1e6))
     if day > 31:
-        t = yr
-        yr = day
-        day = t
+        yr, day = (day, yr)
     return  datetime.datetime(yr, mon, day, hr, mn, sec, usec)
 
 
@@ -146,3 +144,34 @@ def getargs_daterange(resargs, fieldselect, datefield='date_obs'):
     if not resargs['nodates']:
         return parsedaterange(fieldselect, daterange=resargs['dates'], allmonth=resargs['allmonth'], datefield=datefield)
     return None
+
+
+class DateRangeArg:
+    """Date ranges other than in database filed"""
+
+    def __init__(self):
+        self.fromdate = datetime.date(1970, 1, 1)
+        self.todate = datetime.date(2099, 12, 31)
+
+    def inrange(self, dat):
+        """Check in range"""
+        if isinstance(dat, datetime.datetime):
+            dat = dat.date()
+        return self.fromdate <= dat <= self.todate
+
+    def parsearg(self, arg):
+        """Parse a command-line argument"""
+        datesp = arg.split(':')
+        try:
+            if len(datesp) != 2:
+                self.fromdate = self.todate = parsetime(arg).date()
+            else:
+                fd, td = datesp
+                if len(fd) != 0:
+                    self.fromdate = parsetime(fd).date()
+                if len(td) != 0:
+                    self.todate = parsetime(td).date()
+        except ValueError:
+            raise ValueError("Did not understand date range " + arg)
+        if self.fromdate > self.todate:
+            raise ValueError("Date range from > to " + arg)
