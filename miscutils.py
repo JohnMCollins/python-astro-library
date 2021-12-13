@@ -20,7 +20,7 @@ def removesuffix(st, suff=None, allsuff=False):
        If allsuff is true, remove all or all matching suffixes"""
 
     # Get rid of leading dots in suffices and trailing on string
-    
+
     while len(st) > 0  and  st[-1] == '.':
         st = st[:-1]
     if suff is not None:

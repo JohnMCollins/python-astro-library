@@ -30,7 +30,7 @@ for filtname in objdata.Possible_filters:
 class ObjLoc:
     """Class for remembering an object location"""
 
-    def __init__(self, radeg=0.0, decdeg=0.0, col=0, row=0, name="", dispname="", apsize=6, istarget=False, invented=False, isusable=True):
+    def __init__(self, radeg=0.0, decdeg=0.0, col=0, row=0, name="", dispname="", apsize=0, istarget=False, invented=False, isusable=True):
         self.radeg = radeg
         self.decdeg = decdeg
         self.col = col
@@ -52,7 +52,7 @@ class ObjLoc:
         self.row = 0
         self.name = ""
         self.dispname = ""
-        self.apsize = 6
+        self.apsize = 0
         for f in objdata.Possible_filters:
             setattr(self, f + "mag", None)
         self.istarget = node.get("target", 'n') == 'y'
