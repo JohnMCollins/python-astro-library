@@ -1,17 +1,15 @@
 """outines for object info database"""
 
 import xml.etree.ElementTree as ET
+# import sys
 import datetime
 import os.path
-from astropy.time import Time
-from astropy.coordinates import SkyCoord
-import astropy.units as u
 import pymysql
 import remdefaults
+import objident
+import objposition
+import objparam
 import xmlutil
-
-DEFAULT_APSIZE = 6
-Possible_filters = 'girzHJK'
 
 
 class  ObjDataError(Exception):
@@ -38,13 +36,37 @@ def get_objname(dbcurs, alias, allobj=False):
         raise ObjDataError("Unknown object or alias name", alias)
 
 
-def nameused(dbcurs, name):
+def nameused(dbcurs, name, allobj=False):
     """Check if name is in use before manually adding it"""
     try:
-        get_objname(dbcurs, name)
+        get_objname(dbcurs, name, allobj)
         return True
     except ObjDataError:
         return False
+
+
+def nextname(dbcurs, prefix):
+    """Get next name to invent with given prefix, appending -001 etc
+    NB assuming exactly 3 digits"""
+    dbcurs.execute("SELECT objname FROM objdata WHERE objname REGEXP %s ORDER BY objname DESC LIMIT 1", '^' + prefix + '(-\d\d\d)?$')
+    exist = dbcurs.fetchall()
+    if len(exist) == 0:
+        if not nameused(dbcurs, prefix, True):
+            return  prefix
+        n = 0
+    else:
+        exist = exist[0][0]
+        ebits = exist.split('-')
+        lastc = ebits.pop()
+        if '-'.join(ebits) == prefix:
+            n = int(lastc)
+        else:
+            n = 0
+    while 1:
+        n += 1
+        newname = "{:s}-{:03d}".format(prefix, n)
+        if not nameused(dbcurs, newname, True):
+            return newname
 
 
 class ObjAlias:
@@ -137,180 +159,113 @@ class ObjAlias:
             raise ObjDataError("No alias to delete of name", self.aliasname)
 
 
-class ObjData:
+class ObjData(objparam.ObjParam):
     """Decreipt an individaul object"""
 
-    def __init__(self, objname=None, objtype=None, dispname=None):
-        self.objname = self.dispname = objname
-        self.objtype = objtype
-        if dispname is not None:
-            self.dispname = dispname
-        self.vicinity = None
-        self.dist = self.rv = self.ra = self.dec = self.rapm = self.decpm = None
-        self.gmag = self.imag = self.rmag = self.zmag = self.Hmag = self.Jmag = self.Kmag = None
-        self.apsize = DEFAULT_APSIZE
-        self.invented = False
-        self.usable = True
-        self.suppress = False
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        try:
+            self.suppress = kwargs['suppress']
+        except KeyError:
+            self.suppress = False
 
-    def get(self, dbcurs, name=None, allobj=False):
+    def get(self, dbcurs, name=None, ind=0):
         """Get object by name"""
 
-        if name is None:
-            name = self.objname
-            if name is None:
-                raise ObjDataError("No name supplied for ObjData", "")
-        if allobj:
-            extra = ""
+        if ind != 0:
+            selector = "ind={:d}".format(ind)
+        elif name is not None:
+            selector = "objname=" + dbcurs.connection.escape(get_objname(dbcurs, name, allobj=True))
+        elif self.objind != 0:
+            selector = "ind={:d}".format(self.objind)
         else:
-            extra = "suppress=0 AND "
-        dbcurs.execute("SELECT objname,objtype,dispname,vicinity,dist,rv,radeg,decdeg,rapm,decpm,gmag,imag,rmag,zmag,Hmag,Jmag,Kmag,apsize,invented,usable,suppress FROM objdata WHERE " + extra + "objname=%s", get_objname(dbcurs, name, allobj=allobj))
+            try:
+                self.check_valid_id(check_vicinity=False)
+            except objident.ObjIdentErr as e:
+                raise ObjDataError(e.getmessage())
+            selector = "objname=" + dbcurs.connection.escape(get_objname(dbcurs, self.objname, allobj=True))
+            name = self.objname
+
+        dbcurs.execute("SELECT ind,objname,objtype,dispname,vicinity," \
+                       "dist,rv,radeg,decdeg,rapm,decpm," \
+                       "apsize,irapsize,apstd,irapstd,basedon,irbasedon,invented,usable," \
+                       "suppress FROM objdata WHERE " + selector)
         f = dbcurs.fetchall()
         if len(f) != 1:
             if len(f) == 0:
                 raise ObjDataError("(warning) Object not found", name)
             raise ObjDataError("Internal problem too many objects with name", name)
-        self.objname, self.objtype, self.dispname, self.vicinity, self.dist, self.rv, self.ra, self.dec, self.rapm, self.decpm, self.gmag, self.imag, self.rmag, self.zmag, self.Hmag, self.Jmag, self.Kmag, self.apsize, self.invented, self.usable, self.suppress = f[0]
-
-    def is_target(self):
-        """Report if it's the target by comparing with vicinity"""
-        return  self.objname == self.vicinity
+        self.objind, self.objname, self.objtype, self.dispname, self.vicinity, \
+            self.dist, self.rv, self.ra, self.dec, self.rapm, self.decpm, \
+            self.apsize, self.irapsize, self.apstd, self.irapstd, self.basedon, self.irbasedon, self.invented, self.usable, self.suppress = f[0]
+        self.save_pos()
+        self.fix_dispname()
+        self.get_mags(dbcurs, self.objind)
 
     def put(self, dbcurs):
         """Save object to database"""
-        if self.objname is None:
-            raise ObjDataError("No objname in ObjData", "")
-        if self.dispname is None:
-            raise ObjDataError("No display name in ObjData for", self.objname)
-        if self.vicinity is None:
-            raise ObjDataError("No vicinity in ObjData for", self.objname)
-        if self.ra is None or self.dec is None:
-            raise ObjDataError("No coords in ObjData for", self.objname)
-        conn = dbcurs.connection
+        try:
+            self.check_valid_id(check_vicinity=True)
+            self.check_valid_posn()
+        except objident.ObjIdentErr as e:
+            raise ObjDataError(e.getmessage())
+        except objposition.ObjPositionErr as e:
+            raise ObjDataError(e.getmessage())
+
         fieldnames = []
         fieldvalues = []
-
-        fieldnames.append("objname")
-        fieldvalues.append(conn.escape(self.objname))
-        fieldnames.append("dispname")
-        fieldvalues.append(conn.escape(self.dispname))
-        fieldnames.append("vicinity")
-        fieldvalues.append(conn.escape(self.vicinity))
-
-        if self.objtype is not None:
-            fieldnames.append("objtype")
-            fieldvalues.append(conn.escape(self.objtype))
-
-        if self.dist is not None:
-            fieldnames.append("dist")
-            fieldvalues.append("%.6g" % self.dist)
-
-        if self.rv is not None:
-            fieldnames.append("rv")
-            fieldvalues.append("%.6g" % self.rv)
-
-        fieldnames.append("radeg")
-        fieldvalues.append("%.6g" % self.ra)
-        fieldnames.append("decdeg")
-        fieldvalues.append("%.6g" % self.dec)
-
-        if self.rapm is not None:
-            fieldnames.append("rapm")
-            fieldvalues.append("%.6g" % self.rapm)
-        if self.decpm is not None:
-            fieldnames.append("decpm")
-            fieldvalues.append("%.6g" % self.decpm)
-
-        for f in Possible_filters:
-            aname = f + "mag"
-            val = getattr(self, aname, None)
-            if val is not None:
-                fieldnames.append(aname)
-                fieldvalues.append("%.6g" % val)
-
-        fieldnames.append("apsize")
-        fieldvalues.append("%d" % self.apsize)
-        fieldnames.append("invented")
-        if self.invented:
-            fieldvalues.append("1")
-        else:
-            fieldvalues.append("0")
-        fieldnames.append("usable")
-        if self.usable:
-            fieldvalues.append("1")
-        else:
-            fieldvalues.append("0")
+        self.put_param(dbcurs, fieldnames, fieldvalues)
 
         try:
             dbcurs.execute("INSERT INTO objdata (" + ",".join(fieldnames) + ") VALUES (" + ",".join(fieldvalues) + ")")
+            self.objind = dbcurs.lastrowid
         except pymysql.MySQLError as e:
             raise ObjDataError("Could not insert object " + self.objname, e.args[1])
 
     def update(self, dbcurs):
         """Update object to database"""
-        if self.objname is None:
-            raise ObjDataError("No objname in ObjData", "")
-
-        conn = dbcurs.connection
-        fields = []
-        if self.dispname is not None:
-            fields.append("dispname=" + conn.escape(self.dispname))
-        if self.vicinity is not None:
-            fields.append("vicinity=" + conn.escape(self.vicinity))
-        if self.objtype is not None:
-            fields.append("objtype=" + conn.escape(self.objtype))
-        if self.dist is not None:
-            fields.append("dist=%.6g" % self.dist)
-        if self.rv is not None:
-            fields.append("rv=%.6g" % self.rv)
-        if self.ra is not None:
-            fields.append("radeg=%.6g" % self.ra)
-        if self.dec is not None:
-            fields.append("decdeg=%.6g" % self.dec)
-        if self.rapm is not None:
-            fields.append("rapm=%.6g" % self.rapm)
-        if self.decpm is not None:
-            fields.append("decpm=%.6g" % self.decpm)
-        for f in Possible_filters:
-            aname = f + "mag"
-            val = getattr(self, aname, None)
-            if val is not None:
-                fields.append("%s=%.6g" % (aname, val))
-        fields.append("apsize=%d" % self.apsize)
-        if self.invented:
-            fields.append("invented=1")
-        else:
-            fields.append("invented=0")
-        if self.usable:
-            fields.append("usable=1")
-        else:
-            fields.append("usable=0")
 
         try:
-            dbcurs.execute("UPDATE objdata SET " + ",".join(fields) + " WHERE objname=" + conn.escape(self.objname))
+            self.check_valid_id(check_dispname=True, check_vicinity=True, check_objind=True)
+        except objident.ObjIdentErr as e:
+            raise ObjDataError(e.getmessage())
+
+        fields = []
+        self.update_ident(dbcurs, fields)
+        self.update_info(dbcurs, fields)
+        self.update_position(fields)
+        self.update_mags(fields)
+
+        try:
+            dbcurs.execute("UPDATE objdata SET " + ",".join(fields) + " WHERE objname=%s", self.objname)
         except pymysql.MySQLError as e:
             raise ObjDataError("Could not update object " + self.objname, e.args[1])
 
     def delete(self, dbcurs):
         """Delete data for object and also delete aliases for it"""
 
-        if self.objname is None:
-            raise ObjDataError("No objname in ObjData", "")
+        try:
+            self.check_valid_id(check_dispname=False)
+        except objident.ObjIdentErr as e:
+            raise ObjDataError(e.getmessage())
 
         n = 0
+        name = self.objname
         try:
-            dbcurs.execute("DELETE FROM objalias WHERE objname=%s", self.objname)
-            n = dbcurs.execute("DELETE FROM objdata WHERE objname=%s", self.objname)
+            dbcurs.execute("DELETE FROM objalias WHERE objname=%s", name)
+            n = dbcurs.execute("DELETE FROM objdata WHERE objname=%s", name)
         except pymysql.MySQLError as e:
-            raise ObjDataError("Could not delete object " + self.objname, e.args[1])
+            raise ObjDataError("Could not delete object " + name, e.args[1])
         if n == 0:
-            raise ObjDataError("No objects to delete of name", self.objname)
+            raise ObjDataError("No objects to delete of name", name)
 
     def list_aliases(self, dbcurs, manonly=False):
         """Get a list of aliases for the object. If manonly is set just list manually entered ones"""
 
-        if self.objname is None:
-            raise ObjDataError("No objname in ObjData", "")
+        try:
+            self.check_valid_id(check_dispname=False)
+        except objident.ObjIdentErr as e:
+            raise ObjDataError(e.getmessage())
 
         dbcurs.execute("SELECT alias,source,sbok FROM objalias WHERE objname=%s", self.objname)
         f = dbcurs.fetchall()
@@ -329,37 +284,51 @@ class ObjData:
 
     def add_alias(self, dbcurs, aliasname, source, sbok=True):
         """Add an alias"""
-        if self.objname is None:
-            raise ObjDataError("No objname in ObjData", "")
+        try:
+            self.check_valid_id(check_dispname=False)
+        except objident.ObjIdentErr as e:
+            raise ObjDataError(e.getmessage())
         ObjAlias(aliasname=aliasname, objname=self.objname, source=source, sbok=sbok).put(dbcurs)
 
     def delete_aliases(self, dbcurs):
-        """Delete all aliases - do this when we recreate list"""
-        if self.objname is None:
-            raise ObjDataError("No objname in ObjData", "")
+        """Delete all aliases for an object"""
+        try:
+            self.check_valid_id(check_dispname=False)
+        except objident.ObjIdentErr as e:
+            raise ObjDataError(e.getmessage())
         dbcurs.execute("DELETE FROM objalias WHERE objname=%s", self.objname)
 
-    def apply_motion(self, obstime):
+    def in_region_check(self, minra, maxra, mindec, maxdec):
+        """Check if object is in region"""
+        try:
+            self.check_valid_posn()
+        except objposition.ObjPositionErr as e:
+            raise ObjDataError(e.getmessage())
+        return  self.in_region(minra, maxra, mindec, maxdec)
+
+    def apply_motion_check(self, obstime):
         """Apply proper motion (mostly) to coordinates"""
 
-        if self.objname is None:
-            raise ObjDataError("No objname in ObjData", "")
-        if self.ra is None or self.dec is None:
-            raise ObjDataError("No coordinates found in objdata for", self.objname)
-        if self.rapm is None or self.decpm is None:
-            return
-        if isinstance(obstime, datetime.date):
-            obstime = datetime.datetime(obstime.year, obstime.month, obstime.day, 12, 0, 0)
-        args = dict(ra=self.ra * u.deg, dec=self.dec * u.deg, obstime=Time('J2000'), pm_ra_cosdec=self.rapm * u.mas / u.yr, pm_dec=self.decpm * u.mas / u.yr)
-        if self.dist is not None:
-            args['distance'] = self.dist * u.lightyear
-        if self.rv is not None:
-            args['radial_velocity'] = self.rv * u.km / u.second
-        spos = SkyCoord(**args).apply_space_motion(new_obstime=Time(obstime))
-        self.ra = spos.ra.deg
-        self.dec = spos.dec.deg
-        if self.dist is not None:
-            self.dist = spos.distance.lightyear
+        try:
+            self.check_valid_id(check_vicinity=True)
+            self.check_valid_posn()
+        except objident.ObjIdentErr as e:
+            raise ObjDataError(e.getmessage())
+        except objposition.ObjPositionErr as e:
+            raise ObjDataError(e.getmessage())
+
+        self.apply_motion(obstime)
+
+    def load(self, node):
+        """Load an object from XML file"""
+        self.load_param(node)
+        self.suppress = xmlutil.getboolattr(node, "suppress")
+
+    def save(self, doc, pnode, name="object"):
+        """Save to XML DOM node"""
+        node = self.save_param(doc, pnode, name)
+        xmlutil.setboolattr(node, "suppress", self.suppress)
+        return  node
 
 
 def get_objects(dbcurs, vicinity, obstime=None):
@@ -367,15 +336,15 @@ def get_objects(dbcurs, vicinity, obstime=None):
     Adjust for time if specified"""
 
     targname = get_objname(dbcurs, vicinity)  # Might give error if unknown
-    dbcurs.execute("SELECT objname FROM objdata WHERE suppress=0 AND vicinity=%s", targname)
+    dbcurs.execute("SELECT ind FROM objdata WHERE suppress=0 AND vicinity=%s", targname)
     onames = dbcurs.fetchall()
 
     results = []
     targobj = None
 
-    for oname, in onames:
-        obj = ObjData(oname)
-        obj.get(dbcurs)
+    for ind, in onames:
+        obj = ObjData()
+        obj.get(dbcurs, ind=ind)
         if obj.is_target():
             targobj = obj
         else:
@@ -396,76 +365,10 @@ def prune_objects(objlist, ras, decs):
     maxra = max(ras)
     mindec = min(decs)
     maxdec = max(decs)
-    return [o for o in objlist if minra <= o.ra <= maxra and mindec <= o.dec <= maxdec]
+    return [o for o in objlist if o.in_region(minra, maxra, mindec, maxdec)]
 
 
-Cached_fields = dict(objname=xmlutil.gettext, dispname=xmlutil.gettext, vicinity=xmlutil.gettext, objtype=xmlutil.gettext,
-                     ra=xmlutil.getfloat, dec=xmlutil.getfloat, dist=xmlutil.getfloat,
-                     origra=xmlutil.getfloat, origdec=xmlutil.getfloat, origdist=xmlutil.getfloat,
-                     rv=xmlutil.getfloat, rapm=xmlutil.getfloat, decpm=xmlutil.getfloat, apsize=xmlutil.getint)
-for possf in Possible_filters:
-    Cached_fields[possf + 'mag'] = xmlutil.getfloat
-
-
-class Cached_ObjData(ObjData):
-    """Form of objdata for when we are caching to file"""
-
-    def __init__(self, objname=None, objtype=None, dispname=None):
-
-        super().__init__(objname, objtype, dispname)
-        self.origra = None
-        self.origdec = None
-        self.origdist = None
-
-    def get(self, dbcurs, name=None):
-        """Revised get to remember initial ra and dec"""
-        ObjData.get(self, dbcurs, name)
-        self.origra = self.ra
-        self.origdec = self.dec
-        self.origdist = self.dist
-
-    def apply_motion(self, obstime):
-        """Apply motion reseting to orignial ra/dec first"""
-        self.ra = self.origra
-        self.dec = self.origdec
-        self.dist = self.origdist
-        ObjData.apply_motion(self, obstime)
-
-    def in_region(self, minra, maxra, mindec, maxdec):
-        """Check if object is in region"""
-        return  minra <= self.ra <= maxra and mindec <= self.dec <= maxdec
-
-    def load(self, node):
-        """Load an object from XML file"""
-        self.objname = self.dispname = self.vicinity = self.objtype = None
-        self.dist = self.rv = self.ra = self.dec = self.dist = None
-        self.origra = self.origdec = self.origdist = None
-        self.rapm = self.decpm = None
-        for f in Possible_filters:
-            setattr(self, f + 'mag', None)
-        self.apsize = DEFAULT_APSIZE
-        self.invented = node.get("invented", 'n') == 'y'
-        self.usable = node.get("unusable", 'n') != 'y'
-        for child in node:
-            try:
-                setattr(self, child.tag, Cached_fields[child.tag](child))
-            except KeyError:
-                pass
-
-    def save(self, doc, pnode, name):
-        """Save to XML DOM node"""
-        node = ET.SubElement(pnode, name)
-        if self.invented:
-            node.set("invented", 'y')
-        if not self.usable:
-            node.set("unusable", "y")
-        for k in Cached_fields.keys():
-            v = getattr(self, k, None)
-            if v is not None:
-                xmlutil.savedata(doc, node, k, v)
-
-
-CACHEDOBJ_DOC_ROOT = "Cachedobj"
+CACHEDOBJ_DOC_ROOT = "Cachedobj2"
 
 
 class Cached_Objlist:
@@ -491,7 +394,7 @@ class Cached_Objlist:
             raise ObjDataError("Invalid get all - is vicinity set right", "")
         self.objlist = []
         for obj, in dbcurs.fetchall():
-            st = Cached_ObjData(obj)
+            st = ObjData(name=obj)
             st.get(dbcurs)
             self.objlist.append(st)
         for obj in self.objlist:
@@ -511,12 +414,13 @@ class Cached_Objlist:
         """Adjust for proper motions"""
         difft = newdate - self.fullcalc_date.date()
         nyears = difft.days / 365.25
-        newtime = newdate + difft
+#         newtime = newdate + difft
         for obj in self.objlist:
-            if obj.rapm is None or obj.decpm is None:
-                continue
             if abs(obj.rapm * nyears) >= 0.5 or abs(obj.decpm * nyears) >= 0.5:
-                obj.apply_motion(newtime)
+#                 print("Recalc for {:s}".format(obj.dispname), file=sys.stderr)
+                obj.apply_motion(newdate)
+#             else:
+#                 print("No recalc for {:s}".format(obj.dispname), file=sys.stderr)
 
     def load(self, node):
         """Load from an XML DOM node"""
@@ -527,11 +431,11 @@ class Cached_Objlist:
             tagn = child.tag
             if tagn == "objs":
                 for gc in child:
-                    cobj = Cached_ObjData()
+                    cobj = ObjData()
                     cobj.load(gc)
                     self.objlist.append(cobj)
             elif tagn == "calcdate":
-                self.fullcalc_date = datetime.datetime.fromisoformat(xmlutil.gettext(child))
+                self.fullcalc_date = xmlutil.getdatetime(child)
             elif tagn == "vicinity":
                 self.vicinity = xmlutil.gettext(child)
 
@@ -539,7 +443,7 @@ class Cached_Objlist:
         """Save to XML DOM node"""
         node = ET.SubElement(pnode, name)
         if self.fullcalc_date is not None:
-            xmlutil.savedata(doc, node, "calcdate", self.fullcalc_date.isoformat())
+            xmlutil.savedate(doc, node, "calcdate", self.fullcalc_date)
         if self.vicinity is not None:
             xmlutil.savedata(doc, node, "vicinity", self.vicinity)
         if len(self.objlist) != 0:
@@ -551,7 +455,8 @@ class Cached_Objlist:
 def load_cached_objs_from_file(fname):
     """Load cached objs text file"""
     try:
-        doc, root = xmlutil.load_file(fname, CACHEDOBJ_DOC_ROOT)
+        dr = xmlutil.load_file(fname, CACHEDOBJ_DOC_ROOT)
+        root = dr[1]
         cobj = Cached_Objlist()
         conode = root.find("OBJL")
         if conode is None:
@@ -578,19 +483,25 @@ def get_sky_region(dbcurs, obj, datet, ras, decs):
     if isinstance(date, datetime.datetime):
         date = date.date()
     map_for_date = remdefaults.skymap_file(obj, date)
+#     print("Looking for skymap", map_for_date, file=sys.stderr)
     if os.path.exists(map_for_date):
+#         print("Found skymap file", file=sys.stderr)
         result = load_cached_objs_from_file(map_for_date)
     else:
         nearest = remdefaults.nearest_skymap_file(obj, date)
         if nearest is None:
+#             print("No nearest file", file=sys.stderr)
             result = Cached_Objlist(obj)
             result.get_all(dbcurs, date)
         else:
             nearest_file, nearest_date = nearest
+#             print("Nearest file is {:s} date {:x}".format(nearest_file, nearest_date), file=sys.stderr)
             if abs((nearest_date - date).days) >= 365:
+#                 print("Recalc all", file=sys.stderr)
                 result = Cached_Objlist(obj)
                 result.get_all(dbcurs, date)
             else:
+#                 print("Recalc for date {:x}".format(date), file=sys.stderr)
                 result = load_cached_objs_from_file(nearest_file)
                 result.adjust_proper_motions(nearest_date)
 

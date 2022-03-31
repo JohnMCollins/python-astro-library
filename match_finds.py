@@ -6,10 +6,6 @@ import numpy as np
 class FindError(Exception):
     """Raise this if we get problems with finding things"""
 
-    def __init__(self, msg, rmsg=None):
-
-        super().__init__(self, msg, rmsg)
-
 
 def allocate_locs(locresults, findresults, threshold=20.0, nocheck=False):
     """Attempt to allocate locations and results theshold gives limit in aresec we don't consider it matching in"""
@@ -17,7 +13,7 @@ def allocate_locs(locresults, findresults, threshold=20.0, nocheck=False):
     # build cross-table of locations by row and find results by column giving distances as a complex
     # with RA in the real part and DEC in the imageinary part
 
-    ctab = np.subtract.outer([complex(l.radeg, 2 * l.decdeg) for l in locresults.results()], [complex(f.radeg, 2 * f.decdeg) for f in findresults.results()])
+    ctab = np.subtract.outer([complex(l.ra, 2 * l.dec) for l in locresults.results()], [complex(f.radeg, 2 * f.decdeg) for f in findresults.results()])
 
     # We put target as first result in locresults so start from there
     # targloc = locresults.resultlist[0]

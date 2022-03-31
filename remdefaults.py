@@ -188,6 +188,16 @@ def findres_file(name):
     return miscutils.replacesuffix(name, ".findres", old='fits.gz')
 
 
+def edits_file(name):
+    """Get the location of an edits file"""
+    return miscutils.replacesuffix(name, ".edits", allsuff=True)
+
+
+def apopt_file(name):
+    """Get the location of an aperture opt file"""
+    return miscutils.replacesuffix(name, ".apopt")
+
+
 def skymap_file(starname, dat):
     """Generate sky map file using base name and date"""
     return libfile("skymaps/{:s}-{:%Y-%m-%d}.skymap".format(starname, dat), insist=True)

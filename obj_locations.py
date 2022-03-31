@@ -1,97 +1,53 @@
 """General Class for locations of objloc list"""
 
 import os.path
-import datetime
+# import sys
 import xml.etree.ElementTree as ET
 import numpy as np
 import xmlutil
 import remdefaults
-import objdata
-# import sys
+import objparam
 
-OBJLOC_DOC_ROOT = "Objloc"
+OBJLOC_DOC_ROOT = "Objloc2"
 
 
 class ObjLocErr(Exception):
     """"Throw if error faound"""
 
 
-ObjLoc_fields = dict(radeg=xmlutil.getfloat,
-                     decdeg=xmlutil.getfloat,
-                     col=xmlutil.getint,
-                     row=xmlutil.getint,
-                     name=xmlutil.gettext,
-                     dispname=xmlutil.gettext,
-                     apsize=xmlutil.getint)
-for filtname in objdata.Possible_filters:
-    ObjLoc_fields[filtname + "mag"] = xmlutil.getfloat
-
-
-class ObjLoc:
+class ObjLoc(objparam.ObjParam):
     """Class for remembering an object location"""
 
-    def __init__(self, radeg=0.0, decdeg=0.0, col=0, row=0, name="", dispname="", apsize=0, istarget=False, invented=False, isusable=True):
-        self.radeg = radeg
-        self.decdeg = decdeg
-        self.col = col
-        self.row = row
-        self.name = name
-        self.dispname = dispname
-        self.apsize = apsize
-        self.istarget = istarget
-        self.invented = invented
-        self.isusable = isusable
-        for f in objdata.Possible_filters:
-            setattr(self, f + "mag", None)
+    attr_routs = dict(row=xmlutil.getint, col=xmlutil.getint)
+
+    def __init__(self, copyobj=None):
+        super().__init__(copyobj=copyobj)
+        self.col = None
+        self.row = None
+        self.istarget = self.is_target()
 
     def load(self, node):
         """Load from XNK dom"""
-        self.radeg = 0.0
-        self.decdeg = 0.0
-        self.col = 0
-        self.row = 0
-        self.name = ""
-        self.dispname = ""
-        self.apsize = 0
-        for f in objdata.Possible_filters:
-            setattr(self, f + "mag", None)
-        self.istarget = node.get("target", 'n') == 'y'
-        self.invented = node.get("invented", 'n') == 'y'
-        self.isusable = node.get("unusable", 'n') != 'y'
+        self.load_param(node)
+        self.col = None
+        self.row = None
+        self.istarget = xmlutil.getboolattr(node, "target")
         for child in node:
             tagn = child.tag
             try:
-                setattr(self, tagn, ObjLoc_fields[tagn](child))
+                setattr(self, tagn, ObjLoc.attr_routs[tagn](child))
             except KeyError:
-                pass
+                continue
 
     def save(self, doc, pnode, name):
         """Save to XML DOM node"""
-        node = ET.SubElement(pnode, name)
-        if self.istarget:
-            node.set("target", "y")
-        if self.invented:
-            node.set("invented", "y")
-        if not self.isusable:
-            node.set("unusable", "y")
-        for k in ObjLoc_fields.keys():
-            try:
-                val = getattr(self, k)
-            except AttributeError:
-                continue
-            if val is None:
-                continue
-            proc = ObjLoc_fields[k]
-            if proc == xmlutil.getfloat:
-                if val == 0.0:
-                    continue
-            elif proc == xmlutil.getint:
-                if val == 0:
-                    continue
-            elif proc == xmlutil.gettext:
-                if len(val) == 0:
-                    continue
-            xmlutil.savedata(doc, node, k, val)
+        node = self.save_param(doc, pnode, name)
+        xmlutil.setboolattr(node, "target", self.istarget)
+        for tagn in ObjLoc.attr_routs:
+            val = getattr(self, tagn, None)
+            if  val is not None:
+                xmlutil.savedata(doc, node, tagn, val)
+        return  node
 
 
 class ObjLocs:
@@ -102,21 +58,21 @@ class ObjLocs:
         self.remfitsobj = remfitsobj
         self.obsdate = None
         self.filter = None
+        self.obsind = None
         try:
             self.filter = remfitsobj.filter
             self.obsdate = remfitsobj.date
+            self.obsind = remfitsobj.from_obsind
         except AttributeError:
             pass
 
     def add_loc(self, objd):
         """Add objdata to location"""
-        r = ObjLoc(radeg=objd.ra, decdeg=objd.dec, name=objd.objname, dispname=objd.dispname, istarget=objd.is_target(), apsize=objd.apsize, isusable=objd.usable, invented=objd.invented)
-        for f in objdata.Possible_filters:
-            mag = f + "mag"
-            val = getattr(objd, mag, None)
-            if val is not None:
-                setattr(r, mag, val)
-        self.resultlist.append(r)
+        self.resultlist.append(ObjLoc(copyobj=objd))
+
+    def num_results(self):
+        """Give number of results in list"""
+        return len(self.resultlist)
 
     def results(self):
         """Generator for result list"""
@@ -135,14 +91,28 @@ class ObjLocs:
         coordlist = w.pix_to_coords(np.array(rowcols))
 
         for res, coords in zip(self.results(), coordlist):
-            res.radeg, res.decdeg = coords
+            if res.origra is None or res.origdec is None:
+                res.origra = res.ra
+                res.origdec = res.dec
+            res.ra, res.dec = coords
+
+    def order_by_separation(self):
+        """Sort objects in object list by descending order of separation
+        from other objects treating declination degrees as twice the size as RA"""
+        pl = [complex(r.ra, 2 * r.dec) for r in self.results()]
+        dtab = np.abs(np.subtract.outer(pl, pl))
+        for d in range(0, dtab.shape[0]):
+            dtab[d, d] = 1e100
+        # Find the minimum sepation from any other object in each case and sort
+        # by maximum of that.
+        self.resultlist = [self.resultlist[r] for r in np.argsort(-dtab.min(axis=1))]
 
     def get_offsets_in_image(self):
         """Get row and column offsets in image for find results,
         return list of (col, row) corresponding to findresults list.
         col and row are -1 if not in the image"""
 
-        coordlist = [(s.radeg, s.decdeg) for s in self.results()]
+        coordlist = [(s.ra, s.dec) for s in self.results()]
         pixlist = self.remfitsobj.wcs.coords_to_pix(np.array(coordlist))
         pixrows, pixcols = self.remfitsobj.data.shape
         result = []
@@ -162,13 +132,16 @@ class ObjLocs:
         """Load up from XML dom"""
 
         self.obsdate = None
+        self.obsind = None
         self.filter = None
         self.resultlist = []
 
         for child in node:
             tagn = child.tag
             if tagn == "obsdate":
-                self.obsdate = datetime.datetime.fromisoformat(xmlutil.gettext(child))
+                self.obsdate = xmlutil.getdatetime(child)
+            elif tagn == "obsind":
+                self.obsind = xmlutil.getint(child)
             elif tagn == 'filter':
                 self.filter = xmlutil.gettext(child)
             elif tagn == "objlist":
@@ -181,7 +154,9 @@ class ObjLocs:
         """Save to XML DOM node"""
         node = ET.SubElement(pnode, name)
         if self.obsdate is not None:
-            xmlutil.savedata(doc, node, "obsdate", self.obsdate.isoformat())
+            xmlutil.savedate(doc, node, "obsdate", self.obsdate)
+        if self.obsind is not None and self.obsind != 0:
+            xmlutil.savedata(doc, node, "obsind", self.obsind)
         if self.filter is not None:
             xmlutil.savedata(doc, node, "filter", self.filter)
         if len(self.resultlist) != 0:
@@ -194,7 +169,8 @@ def load_objlist_from_file(fname, fitsobj=None):
     """Load results from objloc XML file"""
     fname = remdefaults.objloc_file(fname)
     try:
-        doc, root = xmlutil.load_file(fname, OBJLOC_DOC_ROOT)
+        dr = xmlutil.load_file(fname, OBJLOC_DOC_ROOT)
+        root = dr[1]
         fr = ObjLocs(fitsobj)
         frnode = root.find("LOCS")
         if frnode is None:

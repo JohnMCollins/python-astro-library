@@ -49,13 +49,20 @@ def getdatetime(node):
         raise XMLError("Invalid date format for " + node.tag)
 
 
+def savedate(doc, pnode, name, value):
+    """Save a date or datetime value in ISO format"""
+    subnode = ET.SubElement(pnode, name)
+    try:
+        subnode.text = value.isoformat()
+    except AttributeError:
+        raise XMLError("Expected date or datetime for " + name)
+    return  subnode
+
+
 def savedata(doc, pnode, name, value):
     """Encode something to an XML file"""
     subnode = ET.SubElement(pnode, name)
-    if isinstance(value, datetime.date):
-        subnode.text = value.isoformat()
-    else:
-        subnode.text = str(value)
+    subnode.text = str(value)
     return subnode
 
 
@@ -68,9 +75,10 @@ def savefloatlist(doc, pnode, name, value):
 
 def setboolattr(pnode, name, value):
     """Save a boolean attribute"""
-    if not value:
-        return
-    pnode.set(name, 'y')
+    if value:
+        pnode.set(name, 'y')
+    else:
+        pnode.attrib.pop(name, None)
 
 
 def getboolattr(pnode, name):
@@ -93,9 +101,10 @@ def find_child(pnode, name):
     raise XMLError("Could not find element '" + name + "'")
 
 
-def load_file(filename, rootname=None):
+def load_file(filename, rootname=None, oknotfound=False):
     """Load XML DOM document from file.
-    If first char of filename is a < treat as string to parse"""
+    If first char of filename is a < treat as string to parse
+    Pass through FileNotFoundError if oknotfound"""
 
     if filename[0] == '<':
         try:
@@ -105,9 +114,11 @@ def load_file(filename, rootname=None):
             raise XMLError("Parse error: " + e.args[0])
     try:
         doc = ET.parse(filename)
+    except FileNotFoundError:
+        if oknotfound:
+            raise
+        raise XMLError(message='File not found: ' + filename, warningonly=True)
     except IOError as e:
-        if e.args[0] == 2:
-            raise XMLError(message='File not found: ' + filename, warningonly=True)
         raise XMLError("IO error on " + filename + " - " + e.args[1])
     except ET.ParseError as e:
         raise XMLError("Parse error on " + filename + " - " + e.args[0])

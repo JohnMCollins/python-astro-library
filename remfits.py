@@ -1,5 +1,6 @@
 """Classes for handling REM FITS files"""
 
+# import sys
 import re
 from astropy.time import Time
 from astropy.io import fits
@@ -39,6 +40,40 @@ def set_dims_in_hdr(hdr, startx, starty, cols, rows):
     hdr['endX'] = (startx + cols, 'Ending CCD pixel column+1')
     hdr['startY'] = (starty, 'Starting CCD pixel row')
     hdr['endY'] = (starty + rows, 'Ending CCD pixel row+1')
+
+
+class Pixoffsets:
+    """Remember pixel offsets on image"""
+
+    def __init__(self, remfits=None, obsind=0):
+        self.obsind = obsind
+        if obsind == 0 and remfits is not None:
+            self.obsind = remfits.from_obsind
+        self.rowoffset = None
+        self.coloffset = None
+        # self.raoffset = None
+        # self.decoffset = None
+
+    def get_offsets(self, dbcurs):
+        """Get offsets from database and return truth value if successful"""
+        if self.obsind == 0:
+            return  False
+        dbcurs.execute("SELECT rowoffset,coloffset FROM obsinf WHERE obsind={:d}".format(self.obsind))
+        rows = dbcurs.fetchall()
+        if len(rows) != 1:
+            raise RemFitsErr("Unknoew obsind {:d} in get_offsets".format(self.obsind))
+        self.rowoffset, self.coloffset = rows[0]
+        return  self.rowoffset is not None and self.coloffset is not None
+
+    def set_offsets(self, dbcurs, rowoffset, coloffset):
+        """Set offsets in database"""
+        try:
+            self.rowoffset += rowoffset
+            self.coloffset += coloffset
+        except TypeError:
+            self.rowoffset = rowoffset
+            self.coloffset = coloffset
+        dbcurs.execute("UPDATE obsinf SET rowoffset={:d},coloffset={:d} WHERE obsind={:d}".format(self.rowoffset, self.coloffset, self.obsind))
 
 
 class RemFitsHdr:
@@ -195,6 +230,7 @@ class RemFits(RemFitsHdr):
         if data is not None:
             self.norm_data()
         self.from_obsind = from_obsind
+        self.pixoff = None
 
     def init_from_data(self, data):
         """Initialise from data given"""
@@ -215,6 +251,21 @@ class RemFits(RemFitsHdr):
         self.meanval = self.data.mean()
         self.stdval = self.data.std()
 
+    def get_pixoffsets(self, dbcurs):
+        """Get pix offsets field if it exists and adjust"""
+#         print("In get_pixoffsets obsind is ", self.from_obsind, file=sys.stderr)
+        if dbcurs is None or self.from_obsind == 0 or self.wcs is None:
+#             print("Aborting pixoffsets", file=sys.stderr)
+            return self
+        if self.pixoff is not None:
+            raise RemFitsErr("Doing get offsets second time")
+        pixoff = Pixoffsets(obsind=self.from_obsind)
+        if pixoff.get_offsets(dbcurs):
+#             print("get_offsets returned col/row {:d}/{:d}".format(pixoff.coloffset, pixoff.rowoffset), file=sys.stderr)
+            self.pixoff = pixoff
+            self.wcs.accum_offsets(-pixoff.coloffset, -pixoff.rowoffset)
+        return  self
+
     def load_from_fits(self, fname):
         """Load and fill up from specified file"""
         try:
@@ -225,6 +276,10 @@ class RemFits(RemFitsHdr):
             raise RemFitsErr("Open of " + fname + " (" + e.filename + ") gave error " + e.strerror)
         self.init_from(ff[0].header, ff[0].data)
         ff.close()
+        try:
+            self.from_obsind = self.hdr['OBSIND']
+        except KeyError:
+            pass
 
     def load_from_obsind(self, dbcurs, obsind):
         """Load and fill up from obsind"""
@@ -278,7 +333,8 @@ def parse_filearg(name, dbcurs, typef=None):
 
             if hdr is None:
                 raise RemFitsErr("Could not decode FITS file for " + str(name))
-            return  RemFits(hdr, data, from_obsind=fobs)
+
+            return  RemFits(hdr, data, from_obsind=fobs).get_pixoffsets(dbcurs)
 
         except remget.RemGetError as e:
             raise RemFitsErr("Error fetching file for " + name + " - " + e.args[0])
@@ -305,7 +361,7 @@ def parse_filearg(name, dbcurs, typef=None):
 
             if hdr is None:
                 raise RemFitsErr("Could not decode FITS file for " + name)
-            return  RemFits(hdr, data, from_obsind=fobs)
+            return  RemFits(hdr, data, from_obsind=fobs).get_pixoffsets(dbcurs)
 
         r = RemFits()
         r.load_from_fits(rname)
@@ -316,7 +372,7 @@ def parse_filearg(name, dbcurs, typef=None):
             if typef == 'B' and r.ftype != 'Daily bias' and r.ftype != 'Combined bias' and r.ftype != 'Master':
                 raise RemFitsErr("Expecting " + name + " to be bias file not " + r.ftype)
 
-        return  r
+        return  r.get_pixoffsets(dbcurs)
 
     except remget.RemGetError as e:
         raise RemFitsErr("Error fetching file for " + name + " - " + e.args[0])
