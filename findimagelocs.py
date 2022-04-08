@@ -2,31 +2,31 @@
 
 import numpy as np
 
-def findimagelocs(imagedata, sign, apwidth = 6):
+def findimagelocs(imagedata, sign, apsize = 6):
     """Find x,y coods and adus of objects in imagedate.
 
     imagedate = 2-D array for image giving ADUs subtract off median first if Requiredr
     sign - number of ADUs in aperture to be significant
-    apwidth radius in pixels"
+    apsize radius in pixels"
 
     return list of (x, y, adus)"""
 
     pixrows, pixcols = imagedata.shape
 
-    mincol = apwidth
-    maxcol = pixcols - apwidth - 1
+    mincol = apsize
+    maxcol = pixcols - apsize - 1
 
-    adiff = 2 * apwidth
+    adiff = 2 * apsize
     arng = adiff + 1
-    apsq = apwidth * apwidth
+    apsq = apsize * apsize
 
     mask = np.zeros((arng, arng))
-    rads = np.add.outer(np.arange(-apwidth,apwidth+1)**2,np.arange(-apwidth,apwidth+1)**2)
+    rads = np.add.outer(np.arange(-apsize,apsize+1)**2,np.arange(-apsize,apsize+1)**2)
     mask[rads <= apsq] = 1.0
 
     results = []
 
-    for srow in range(apwidth, pixrows-apwidth):
+    for srow in range(apsize, pixrows-apsize):
 
         crow = imagedata[srow]
 
@@ -34,9 +34,9 @@ def findimagelocs(imagedata, sign, apwidth = 6):
 
             for xp in range(max(0, place-adiff), min(place,pixcols-arng)):
 
-                adus = np.sum(imagedata[srow-apwidth:srow+apwidth+1,xp:xp+arng] * mask)
+                adus = np.sum(imagedata[srow-apsize:srow+apsize+1,xp:xp+arng] * mask)
                 if adus >= sign:
-                    newres = (xp+apwidth, srow, adus)
+                    newres = (xp+apsize, srow, adus)
                     if newres not in results:
                         results.append(newres)
 

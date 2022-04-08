@@ -14,13 +14,13 @@ def tooclose(row, col, existing):
     return False
 
 
-def findfast(imagedata, sign, apwidth=6):
+def findfast(imagedata, sign, apsize=6):
     """Find x,y coods and adus of objects in imagedate.
 
     This version tries to do it all at once using a 4-day array of masks.
     imagedate = 2-D array for image giving ADUs subtract off median first if Requiredr
     sign - starting from points great than this * std dev away
-    apwidth radius in pixels"
+    apsize radius in pixels"
 
     return list of (x, y, adus)"""
 
@@ -28,16 +28,16 @@ def findfast(imagedata, sign, apwidth=6):
 
     pixrows, pixcols = imagedata.shape
 
-    apdiam = 2 * apwidth + 1
-    apsq = apwidth ** 2
-    mincol = minrow = apwidth - 1
+    apdiam = 2 * apsize + 1
+    apsq = apsize ** 2
+    mincol = minrow = apsize - 1
     maxrow = pixrows - apdiam  # This is actually 1 more
     maxcol = pixcols - apdiam  # This is actually 1 more
 
     # Kick off with masj ub bottom left
 
     mask = np.zeros_like(imagedata)
-    rads = np.add.outer((np.arange(0, pixrows) - apwidth) ** 2, (np.arange(0, pixcols) - apwidth) ** 2)
+    rads = np.add.outer((np.arange(0, pixrows) - apsize) ** 2, (np.arange(0, pixcols) - apsize) ** 2)
     rv, cv = np.where(rads <= apsq)
     for r, c in zip(rv, cv):
         mask.itemset((r, c), 1.0)

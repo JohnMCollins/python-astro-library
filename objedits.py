@@ -55,13 +55,14 @@ class ObjEdit:
 class ObjEdit_Newobj_Base(ObjEdit):
     """Remember new objects"""
 
-    attr_list = dict(name=xmlutil.gettext, adus=xmlutil.getfloat, newlabel=xmlutil.gettext)
+    attr_list = dict(name=xmlutil.gettext, dispname=xmlutil.gettext, adus=xmlutil.getfloat, newlabel=xmlutil.gettext)
 
-    def __init__(self, op, row, col, radeg, decdeg):
+    def __init__(self, op, row, col, name, dispname, radeg, decdeg):
         super().__init__(op, row, col)
         self.radeg = radeg
         self.decdeg = decdeg
-        self.name = None
+        self.name = name
+        self.dispname = dispname
         self.adus = None
         self.newlabel = None
 
@@ -88,8 +89,8 @@ class ObjEdit_Newobj_Base(ObjEdit):
 class ObjEdit_Newobj_Ap(ObjEdit_Newobj_Base):
     """New object for when we are saving a given aperture"""
 
-    def __init__(self, row=0, col=0, radeg=0.0, decdeg=0.0, apsize=0):
-        super().__init__("create", row, col, radeg, decdeg)
+    def __init__(self, row=0, col=0, name="", dispname="", radeg=0.0, decdeg=0.0, apsize=0):
+        super().__init__("create", row, col, name, dispname, radeg, decdeg)
         self.apsize = apsize
 
     def load(self, node):
@@ -110,8 +111,8 @@ class ObjEdit_Newobj_Ap(ObjEdit_Newobj_Base):
 class ObjEdit_Newobj_Calcap(ObjEdit_Newobj_Base):
     """New object for when we are calculating an aperture"""
 
-    def __init__(self, row=0, col=0, radeg=0.0, decdeg=0.0):
-        super().__init__("createcalc", row, col, radeg, decdeg)
+    def __init__(self, row=0, col=0, name="", dispname="", radeg=0.0, decdeg=0.0):
+        super().__init__("createcalc", row, col, name, dispname, radeg, decdeg)
 
 
 class ObjEdit_Exist_Base(ObjEdit):
@@ -247,6 +248,10 @@ class ObjEdit_List:
             if res.obj is not None:
                 self.namelist.add(res.obj.objname)
                 self.namelist.add(res.obj.dispname)
+        for ed in self.editlist:
+            if isinstance(ed, ObjEdit_Newobj_Base):
+                self.namelist.add(ed.name)
+                self.namelist.add(ed.dispname)
 
     def add_edit(self, edit):
         """Add edit to list"""

@@ -169,7 +169,7 @@ class FindResults:
             if nohidden:
                 return len([r for r in self.resultlist if not r.hide and r.obj is not None])
             return len([r for r in self.resultlist if r.obj is not None])
-        elif nohidden:
+        if nohidden:
             return len([r for r in self.resultlist if not r.hide])
         return  len(self.resultlist)
 
@@ -194,6 +194,15 @@ class FindResults:
             if (r - row) ** 2 + (c - col) ** 2 <= 4 * self.apsq:
                 return True
         return False
+
+    def get_targobj(self):
+        """Get target object, which we assume to be sorted to the front"""
+        if self.num_results(idonly=True, nohidden=True) == 0:
+            return  None
+        ret = self.resultlist[0]
+        if ret.hide or not ret.istarget:
+            return  None
+        return  ret
 
     def relabel(self):
         """Assign labels to reordered list"""
@@ -220,7 +229,7 @@ class FindResults:
         self.resultlist = [r for r in self.resultlist if r.col is not None and r.row is not None]
         self.resultlist.sort(key=lambda x: x.adus + int(x.istarget) * 1e50, reverse=True)
 
-    def get_image_dims(self, apwidth):
+    def get_image_dims(self, apsize):
         """Internal routine to get dimensions and other data of image"""
 
         if self.remfitsobj is None:
@@ -228,19 +237,19 @@ class FindResults:
         self.imagedata = self.remfitsobj.data
         self.pixrows, self.pixcols = self.imagedata.shape
 
-        self.currentap = apwidth
-        self.apsq = apwidth ** 2
-        self.minrow = self.mincol = apwidth + 1
-        self.maxrow = self.pixrows - apwidth  # This is actually 1 more
-        self.maxcol = self.pixcols - apwidth  # This is actually 1 more
+        self.currentap = apsize
+        self.apsq = apsize ** 2
+        self.minrow = self.mincol = apsize + 1
+        self.maxrow = self.pixrows - apsize  # This is actually 1 more
+        self.maxcol = self.pixcols - apsize  # This is actually 1 more
 
-    def makemask(self, apwidth):
+    def makemask(self, apsize):
         """Make a mask for aperature of given radius"""
 
-        self.currentap = apwidth
+        self.currentap = apsize
         self.mask = np.zeros_like(self.imagedata)
-        rads = np.add.outer((np.arange(0, self.pixrows) - apwidth) ** 2, (np.arange(0, self.pixcols) - apwidth) ** 2)
-        rv, cv = np.where(rads <= apwidth * apwidth)
+        rads = np.add.outer((np.arange(0, self.pixrows) - apsize) ** 2, (np.arange(0, self.pixcols) - apsize) ** 2)
+        rv, cv = np.where(rads <= apsize * apsize)
         for r, c in zip(rv, cv):
             self.mask.itemset((r, c), 1.0)
         self.maskpoints = np.sum(self.mask)
@@ -248,17 +257,17 @@ class FindResults:
         self.min_singlepix = self.remfitsobj.meanval + self.signif * self.remfitsobj.stdval
         self.min_apertureadus = self.maskpoints * self.remfitsobj.stdval * self.totsignif
 
-    def make_ap_mask(self, apwidth=None):
+    def make_ap_mask(self, apsize=None):
         """Make a mask of right size only for aperature of given radius"""
 
-        if apwidth is None:
-            apwidth = self.currentap
-        side = apwidth * 2 + 1
-        radsq = apwidth * apwidth
+        if apsize is None:
+            apsize = self.currentap
+        side = apsize * 2 + 1
+        radsq = apsize * apsize
         self.mask = np.zeros((side, side), dtype=np.float32)
         for r in range(side):
             for c in range(side):
-                if (r - apwidth) ** 2 + (c - apwidth) ** 2 <= radsq:
+                if (r - apsize) ** 2 + (c - apsize) ** 2 <= radsq:
                     self.mask.itemset((r, c), 1.0)
 
         self.maskpoints = np.sum(self.mask)
@@ -270,67 +279,6 @@ class FindResults:
         """Calculate the total ADUs based arount the given row and column"""
         halfside = self.currentap + 1  # as we have width + 1 + width
         return  np.sum(self.mask * self.imagedata[row - self.currentap:row + halfside, column - self.currentap:column + halfside]) - self.skylevpoints
-
-    def findfast(self, sign=DEFAULT_SIGN, apwidth=6, totsign=DEFAULT_TOTSIGN, brightestonly=1000000, ignleft=0, ignright=0, igntop=0, ignbottom=0):
-        """Find x,y coods and adus of objects in image data.
-
-        Sign gives the number of standard deviations multiple to look for
-        apwidth gives width of aperture to start from
-
-        We reject possibles whose total comes to less than totsign * stddevs
-        return the number of results we found.
-        Limit to number given in brightestonly if only interested in those.
-        """
-        self.get_image_dims(apwidth)
-        # Set up effective start after trimming
-        startcol = ignleft + self.mincol
-        startrow = ignbottom + self.minrow
-        endrow = self.maxrow - igntop
-        endcol = self.maxcol - ignright
-
-        self.makemask(apwidth)
-        cutoff = self.maskpoints * totsign * self.remfitsobj.stdval
-
-        # Get list of points greater than n std devs within search area
-
-        flatim = self.imagedata[startrow:endrow, startcol:endcol].flatten()
-        flatim = flatim[flatim > self.remfitsobj.meanval + sign * self.remfitsobj.stdval]
-        flatim = -np.unique(-flatim)
-
-        possibles = []
-
-        for mxv in flatim:
-            wr, wc = np.where(self.imagedata == mxv)
-            for r, c in zip(wr, wc):
-                if r < startrow or r >= endrow:
-                    continue
-                if c < startcol or c >= endcol:
-                    continue
-                adu = np.sum(np.roll(np.roll(self.mask, shift=c - self.mincol, axis=1), shift=r - self.minrow, axis=0) * self.imagedata) - self.skylevpoints
-                if adu >= cutoff:
-                    possibles.append((r, c, adu))
-
-        possibles = sorted(possibles, key=lambda x:-x[-1])
-
-        results = []
-        for r, c, adu in possibles:
-            if not self.tooclose(r, c, results):
-                results.append((r, c, adu))
-
-        self.resultlist = []
-        for r, c, adu in sorted(results, key=lambda x:x[2], reverse=True):
-            self.resultlist.append(FindResult(row=r, col=c, apsize=apwidth, adus=adu))
-            if len(self.resultlist) >= brightestonly:
-                break
-
-        if len(self.resultlist) != 0:
-            self.calccoords()
-            self.relabel()
-        self.rekey()
-
-        self.signif = sign
-        self.totsignif = totsign
-        return  len(self.resultlist)
 
     def get_exp_rowcol(self, ra, dec):
         """Get expected row and column from given ra and dec"""
@@ -377,22 +325,50 @@ class FindResults:
 
         return  sorted(sorted(results, key=lambda x: x[0] ** 2 + x[1] ** 2), reverse=True, key=lambda x: x[-1])
 
-    def find_object(self, objloc, maxshift=3, eoffrow=0, eoffcol=0, totsign=DEFAULT_TOTSIGN, signif=DEFAULT_SIGN, apwidth=None, defapwidth=None):
+    def find_object(self, objloc, maxshift=3, eoffrow=0, eoffcol=0, totsign=DEFAULT_TOTSIGN, signif=DEFAULT_SIGN, apsize=None, defapsize=None):
         """Fins specific object from expected"""
-        if apwidth is None:
-            apwidth = objloc.apsize
-            if apwidth == 0:
-                if defapwidth is None:
-                    apwidth = objinfo.DEFAULT_APSIZE
+        if apsize is None:
+            apsize = objloc.apsize
+            if apsize == 0:
+                if defapsize is None:
+                    apsize = objinfo.DEFAULT_APSIZE
                 else:
-                    apwidth = defapwidth
-        self.get_image_dims(apwidth)
+                    apsize = defapsize
+        self.get_image_dims(apsize)
         self.totsignif = totsign
         self.signif = signif
-        self.make_ap_mask(apwidth)
+        self.make_ap_mask(apsize)
         self.exprow = objloc.row
         self.expcol = objloc.col
         return  self.get_object_offsets(maxshift=maxshift, eoffrow=eoffrow, eoffcol=eoffcol)
+
+    def find_peak(self, row, col, maxshift=3, totsign=DEFAULT_TOTSIGN, signif=DEFAULT_SIGN, apsize=objinfo.DEFAULT_APSIZE):
+        """Find peak for when we are giving a label to an object"""
+        self.get_image_dims(apsize)
+        self.totsignif = totsign
+        self.signif = signif
+        self.make_ap_mask(apsize)
+        self.exprow = row
+        self.expcol = col
+        return  self.get_object_offsets(maxshift=maxshift)
+
+    def opt_aperture(self, row, col, maxshift=3, minap=3, maxap=20):
+        """Optimise aparture looking around maxshift either way from row and col,
+        maximising aperture tbetween minap and maxap."""
+
+        results = []
+        for possap in range(minap, maxap + 1):
+            self.get_image_dims(possap)
+            self.make_ap_mask(possap)
+            # Store row offset, col offset, row, column, aperture, adus, adus per point
+            for rtry in range(max(self.minrow, row - maxshift), min(self.maxrow, row + maxshift)):
+                for ctry in range(max(self.mincol, col - maxshift), min(self.maxcol, col + maxshift)):
+                    adus = self.calculate_adus(rtry, ctry)
+                    results.append((rtry - row, ctry - col, rtry, ctry, possap, adus, adus / self.maskpoints))
+
+        results = sorted(sorted(results, key=lambda x: x[0] ** 2 + x[1] ** 2), reverse=True, key=lambda x: x[-1])
+        dummy, dummy, rres, cres, aperture, adus, dummy = results[0]
+        return  (aperture, rres, cres, adus)
 
     def calccoords(self):
         """Converts rows and columns in result list to ra and dec"""

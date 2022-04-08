@@ -2,7 +2,7 @@
 
 import numpy as np
 
-def findobjadu(w, imagedata, radec, searchwidth, apwidth = 6):
+def findobjadu(w, imagedata, radec, searchwidth, apsize = 6):
     """Find object in image file in vicinity of given coords
 
     Aargs are:
@@ -11,7 +11,7 @@ def findobjadu(w, imagedata, radec, searchwidth, apwidth = 6):
         imagedata - Image data, don't actuallylook at this we just want the sizes
         radec - tuple with (RA, DEC) of object
         searchwidth - pixels we search either way
-        apwidth (default 6) aperture dith - using circular aperture
+        apsize (default 6) aperture dith - using circular aperture
 
         We should have already checked we can accommodate search and apertgure width
 
@@ -21,7 +21,7 @@ def findobjadu(w, imagedata, radec, searchwidth, apwidth = 6):
         tuple (pixx, pixy, adu)"""
 
 
-    # Create matrix the same shape as imagedata with circular aperture radius apwidth centred
+    # Create matrix the same shape as imagedata with circular aperture radius apsize centred
     # on the initial coords
 
     pixrows, pixcols = imagedata.shape
@@ -34,7 +34,7 @@ def findobjadu(w, imagedata, radec, searchwidth, apwidth = 6):
 
     rads = np.sqrt(np.add.outer((np.arange(0,pixrows)-objy)**2,(np.arange(0,pixcols)-objx)**2))
     mask = np.zeros_like(imagedata)
-    mask[rads <= apwidth] = 1.0
+    mask[rads <= apsize] = 1.0
 
     med = np.median(imagedata)
     redimage = np.clip(imagedata - med, 0, None)
@@ -44,12 +44,12 @@ def findobjadu(w, imagedata, radec, searchwidth, apwidth = 6):
     coordlist = []
     dists = []
     for yr in range(-searchwidth-1, searchwidth + 1):
-        if objy + yr - apwidth < 0: continue
-        if objy + yr + apwidth >= pixcols: break
+        if objy + yr - apsize < 0: continue
+        if objy + yr + apsize >= pixcols: break
         ysq = yr * yr
         for xr in range(-searchwidth-1, searchwidth + 1):
-            if objx + xr - apwidth < 0: continue
-            if objx + xr + apwidth >= pixcols: break
+            if objx + xr - apsize < 0: continue
+            if objx + xr + apsize >= pixcols: break
             xsq = xr * xr
             dist = xsq + ysq
             if dist > swsq:
