@@ -9,6 +9,7 @@ import configfile
 DEFAULT_SIGN = 1.5
 DEFAULT_TOTSIGN = .75
 DEFAULT_MAXSHIFT = 10
+DEFAULT_LOOKAROUND = 3
 DEFAULT_DEFAPSIZE = 6
 DEFAULT_MINAP = 3
 DEFAULT_MAXAP = 20
@@ -30,6 +31,10 @@ Field_names = dict(signif=(xmlutil.getfloat,
                                int,
                                DEFAULT_MAXSHIFT,
                                "Max displacement from expected position to consider "),
+                    lookaround=(xmlutil.getint,
+                                int,
+                                DEFAULT_LOOKAROUND,
+                                "Displacement to look around after finding approximate peak"),
                    defapsize=(xmlutil.getint,
                                 int,
                                 DEFAULT_DEFAPSIZE,
@@ -51,6 +56,7 @@ class SearchParam:
         self.signif = DEFAULT_SIGN
         self.totsig = DEFAULT_TOTSIGN
         self.maxshift = DEFAULT_MAXSHIFT
+        self.lookaround = DEFAULT_LOOKAROUND
         self.defapsize = DEFAULT_DEFAPSIZE
         self.minap = DEFAULT_MINAP
         self.maxap = DEFAULT_MAXAP
@@ -81,14 +87,30 @@ class SearchParam:
         for f, v in Field_names.items():
             dummy, typ, dummy, helpm = v
             argp.add_argument('--' + f, type=typ, default=getattr(self, f, 0), help=helpm)
-        argp.add_argument('--search-save', action='store_true', help='Save new search parametrs file')
+        argp.add_argument('--searchsave', action='store_true', help='Save new search parametrs file')
 
     def getargs(self, resargs):
         """Get search options"""
 
         for f in Field_names:
             setattr(self, f, resargs[f])
-        self.saveparams = resargs['search-save']
+        self.saveparams = resargs['searchsave']
+
+    def display(self, outfile):
+        """Output search parameters"""
+        print("Search parameters:\n", file=outfile)
+        maxn = maxh = 0
+        for f, v in Field_names.items():
+            dummy, typ, defv, hlp = v
+            maxn = max(maxn, len(f))
+            maxh = max(maxh, len(hlp))
+        for f, v in Field_names.items():
+            val = getattr(self, f, 0)
+            dummy, typ, defv, hlp = v
+            if typ == float:
+                print("{nam:{naml}s} {hlp:{hlpl}s} {val:#10.4g} (def: {defv:#10.4g}".format(nam=f, naml=maxn, hlp=hlp, hlpl=maxh, val=val, defv=defv), file=outfile)
+            else:
+                print("{nam:{naml}s} {hlp:{hlpl}s} {val:10d} (def: {defv:10d}".format(nam=f, naml=maxn, hlp=hlp, hlpl=maxh, val=val, defv=defv), file=outfile)
 
 
 def load(fname=None, mustexist=False):

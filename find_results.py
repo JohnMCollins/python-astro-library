@@ -7,7 +7,6 @@ import xmlutil
 import remdefaults
 import objident
 import objdata
-import objinfo
 
 # import sys
 
@@ -325,44 +324,47 @@ class FindResults:
 
         return  sorted(sorted(results, key=lambda x: x[0] ** 2 + x[1] ** 2), reverse=True, key=lambda x: x[-1])
 
-    def find_object(self, objloc, maxshift=3, eoffrow=0, eoffcol=0, totsign=DEFAULT_TOTSIGN, signif=DEFAULT_SIGN, apsize=None, defapsize=None):
+    def find_object(self, objloc, searchp, eoffrow=0, eoffcol=0, apsize=None):
         """Fins specific object from expected"""
         if apsize is None:
             apsize = objloc.apsize
             if apsize == 0:
-                if defapsize is None:
-                    apsize = objinfo.DEFAULT_APSIZE
-                else:
-                    apsize = defapsize
+                apsize = searchp.defapsize
         self.get_image_dims(apsize)
-        self.totsignif = totsign
-        self.signif = signif
+        self.totsignif = searchp.totsig
+        self.signif = searchp.signif
         self.make_ap_mask(apsize)
         self.exprow = objloc.row
         self.expcol = objloc.col
-        return  self.get_object_offsets(maxshift=maxshift, eoffrow=eoffrow, eoffcol=eoffcol)
+        return  self.get_object_offsets(maxshift=searchp.maxshift, eoffrow=eoffrow, eoffcol=eoffcol)
 
-    def find_peak(self, row, col, maxshift=3, totsign=DEFAULT_TOTSIGN, signif=DEFAULT_SIGN, apsize=objinfo.DEFAULT_APSIZE):
+    def find_peak(self, row, col, searchp, apsize=None):
         """Find peak for when we are giving a label to an object"""
+        if apsize is None:
+            apsize = searchp.defapsize
         self.get_image_dims(apsize)
-        self.totsignif = totsign
-        self.signif = signif
+        self.totsignif = searchp.totsig
+        self.signif = searchp.signif
         self.make_ap_mask(apsize)
         self.exprow = row
         self.expcol = col
-        return  self.get_object_offsets(maxshift=maxshift)
+        return  self.get_object_offsets(maxshift=searchp.maxshift)
 
-    def opt_aperture(self, row, col, maxshift=3, minap=3, maxap=20):
-        """Optimise aparture looking around maxshift either way from row and col,
+    def opt_aperture(self, row, col, searchp, minap=None, maxap=None):
+        """Optimise aparture looking around either way from row and col,
         maximising aperture tbetween minap and maxap."""
 
+        if minap is None:
+            minap = searchp.minap
+        if maxap is None:
+            maxap = searchp.maxap
         results = []
         for possap in range(minap, maxap + 1):
             self.get_image_dims(possap)
             self.make_ap_mask(possap)
             # Store row offset, col offset, row, column, aperture, adus, adus per point
-            for rtry in range(max(self.minrow, row - maxshift), min(self.maxrow, row + maxshift)):
-                for ctry in range(max(self.mincol, col - maxshift), min(self.maxcol, col + maxshift)):
+            for rtry in range(max(self.minrow, row - searchp.lookaround), min(self.maxrow, row + searchp.lookaround)):
+                for ctry in range(max(self.mincol, col - searchp.lookaround), min(self.maxcol, col + searchp.lookaround)):
                     adus = self.calculate_adus(rtry, ctry)
                     results.append((rtry - row, ctry - col, rtry, ctry, possap, adus, adus / self.maskpoints))
 
