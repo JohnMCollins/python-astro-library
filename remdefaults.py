@@ -3,13 +3,9 @@
 import datetime
 import os
 import os.path
-import glob
-import re
+import numpy as np
 import dbops
 import miscutils
-import numpy as np
-
-smmatch = re.compile('.*-(\d+)-(\d+)-(\d+)\.skymap')
 
 
 class RemDefError(Exception):
@@ -197,41 +193,40 @@ def apopt_file(name):
     """Get the location of an aperture opt file"""
     return miscutils.replacesuffix(name, ".apopt")
 
-
-def skymap_file(starname, dat):
-    """Generate sky map file using base name and date"""
-    return libfile("skymaps/{:s}-{:%Y-%m-%d}.skymap".format(starname, dat), insist=True)
-
-
-def skymap_glob(starname):
-    """Run glob on skymaps for given name"""
-    return  glob.iglob(libfile("skymaps/" + starname + "-*.skymap", insist=True))
-
-
-def nearest_skymap_file(starname, dat):
-    """Get nearest skymap file in time.
-    Return tuple of name and date"""
-    sklist = []
-    dayslist = []
-    fdatelist = []
-    if isinstance(dat, datetime.datetime):
-        dat = dat.date()
-    for sk in skymap_glob(starname):
-        mtch = smmatch.match(sk)
-        if mtch is None:
-            continue
-        try:
-            fdate = datetime.date(*map(int, mtch.groups()))
-            sdays = abs(dat - fdate)
-        except ValueError:
-            continue
-        dayslist.append(sdays)
-        sklist.append(sk)
-        fdatelist.append(fdate)
-    if len(sklist) == 0:
-        return  None
-    minind = dayslist.index(min(dayslist))
-    return (sklist[minind], fdatelist[minind])
+# def skymap_file(starname, dat):
+#     """Generate sky map file using base name and date"""
+#     return libfile("skymaps/{:s}-{:%Y-%m-%d}.skymap".format(starname, dat), insist=True)
+#
+#
+# def skymap_glob(starname):
+#     """Run glob on skymaps for given name"""
+#     return  glob.iglob(libfile("skymaps/" + starname + "-*.skymap", insist=True))
+#
+#
+# def nearest_skymap_file(starname, dat):
+#     """Get nearest skymap file in time.
+#     Return tuple of name and date"""
+#     sklist = []
+#     dayslist = []
+#     fdatelist = []
+#     if isinstance(dat, datetime.datetime):
+#         dat = dat.date()
+#     for sk in skymap_glob(starname):
+#         mtch = smmatch.match(sk)
+#         if mtch is None:
+#             continue
+#         try:
+#             fdate = datetime.date(*map(int, mtch.groups()))
+#             sdays = abs(dat - fdate)
+#         except ValueError:
+#             continue
+#         dayslist.append(sdays)
+#         sklist.append(sk)
+#         fdatelist.append(fdate)
+#     if len(sklist) == 0:
+#         return  None
+#     minind = dayslist.index(min(dayslist))
+#     return (sklist[minind], fdatelist[minind])
 
 
 def load_bad_pixmask(name):

@@ -1,11 +1,7 @@
 """outines for object info database"""
 
-import xml.etree.ElementTree as ET
-# import sys
 import datetime
-import os.path
 import pymysql
-import remdefaults
 import objident
 import objposition
 import objparam
@@ -331,34 +327,6 @@ class ObjData(objparam.ObjParam):
         return  node
 
 
-def get_objects(dbcurs, vicinity, obstime=None):
-    """Get a list of objects in vicinity of named object
-    Adjust for time if specified"""
-
-    targname = get_objname(dbcurs, vicinity)  # Might give error if unknown
-    dbcurs.execute("SELECT ind FROM objdata WHERE suppress=0 AND vicinity=%s", targname)
-    onames = dbcurs.fetchall()
-
-    results = []
-    targobj = None
-
-    for ind, in onames:
-        obj = ObjData()
-        obj.get(dbcurs, ind=ind)
-        if obj.is_target():
-            targobj = obj
-        else:
-            results.append(obj)
-    if targobj is None:
-        raise ObjDataError("Could not find target objaect looking for", targname)
-    results.insert(0, targobj)
-
-    if obstime is not None:
-        for r in results:
-            r.apply_motion(obstime)
-    return results
-
-
 def prune_objects(objlist, ras, decs):
     """Prune list of objects to those within ranges of ras and decs given"""
     minra = min(ras)
@@ -368,143 +336,64 @@ def prune_objects(objlist, ras, decs):
     return [o for o in objlist if o.in_region(minra, maxra, mindec, maxdec)]
 
 
-CACHEDOBJ_DOC_ROOT = "Cachedobj2"
+def get_sky_region(dbcurs, vicinity, datet, ras, decs):
+    """Get objects in region of sky and djust proper motions"""
 
+    # Normalise date
 
-class Cached_Objlist:
-    """Cached list of objects with tracking of dates"""
-
-    def __init__(self, vicinity=None):
-        self.fullcalc_date = None
-        self.objlist = []
-        self.vicinity = vicinity
-
-    def numobjs(self):
-        """Return number of objects"""
-        return  len(self.objlist)
-
-    def get_all(self, dbcurs, opdate, vicinity=None):
-        """Get all objects from database to kick off with"""
-
-        if vicinity is not None:
-            self.vicinity = vicinity
-        try:
-            dbcurs.execute("SELECT objname FROM objdata WHERE suppress=0 AND vicinity=%s", get_objname(dbcurs, self.vicinity))
-        except pymysql.MySQLError:
-            raise ObjDataError("Invalid get all - is vicinity set right", "")
-        self.objlist = []
-        for obj, in dbcurs.fetchall():
-            st = ObjData(name=obj)
-            st.get(dbcurs)
-            self.objlist.append(st)
-        for obj in self.objlist:
-            obj.apply_motion(opdate)
-        self.fullcalc_date = opdate
-
-    def prune_region(self, ras, decs):
-        """Prune result to ones in region"""
-        minra = min(ras)
-        maxra = max(ras)
-        mindec = min(decs)
-        maxdec = max(decs)
-        self.objlist = [o for o in self.objlist if o.in_region(minra, maxra, mindec, maxdec)]
-        return self
-
-    def adjust_proper_motions(self, newdate):
-        """Adjust for proper motions"""
-        difft = newdate - self.fullcalc_date.date()
-        nyears = difft.days / 365.25
-#         newtime = newdate + difft
-        for obj in self.objlist:
-            if abs(obj.rapm * nyears) >= 0.5 or abs(obj.decpm * nyears) >= 0.5:
-#                 print("Recalc for {:s}".format(obj.dispname), file=sys.stderr)
-                obj.apply_motion(newdate)
-#             else:
-#                 print("No recalc for {:s}".format(obj.dispname), file=sys.stderr)
-
-    def load(self, node):
-        """Load from an XML DOM node"""
-        self.fullcalc_date = None
-        self.vicinity = None
-        self.objlist = []
-        for child in node:
-            tagn = child.tag
-            if tagn == "objs":
-                for gc in child:
-                    cobj = ObjData()
-                    cobj.load(gc)
-                    self.objlist.append(cobj)
-            elif tagn == "calcdate":
-                self.fullcalc_date = xmlutil.getdatetime(child)
-            elif tagn == "vicinity":
-                self.vicinity = xmlutil.gettext(child)
-
-    def save(self, doc, pnode, name):
-        """Save to XML DOM node"""
-        node = ET.SubElement(pnode, name)
-        if self.fullcalc_date is not None:
-            xmlutil.savedate(doc, node, "calcdate", self.fullcalc_date)
-        if self.vicinity is not None:
-            xmlutil.savedata(doc, node, "vicinity", self.vicinity)
-        if len(self.objlist) != 0:
-            gc = ET.SubElement(node, "objs")
-            for obj in self.objlist:
-                obj.save(doc, gc, "object")
-
-
-def load_cached_objs_from_file(fname):
-    """Load cached objs text file"""
-    try:
-        dr = xmlutil.load_file(fname, CACHEDOBJ_DOC_ROOT)
-        root = dr[1]
-        cobj = Cached_Objlist()
-        conode = root.find("OBJL")
-        if conode is None:
-            raise xmlutil.XMLError("No tree")
-        cobj.load(conode)
-    except xmlutil.XMLError as e:
-        raise ObjDataError("Load of " + fname + " gave", e.args[0])
-    return  cobj
-
-
-def save_cached_objs_to_file(catchedobjs, filename):
-    """Save results to results text file"""
-    try:
-        doc, root = xmlutil.init_save(CACHEDOBJ_DOC_ROOT, CACHEDOBJ_DOC_ROOT)
-        catchedobjs.save(doc, root, "OBJL")
-        xmlutil.complete_save(filename, doc)
-    except xmlutil.XMLError as e:
-        raise ObjDataError("Save of " + filename + " gave", e.args[0])
-
-
-def get_sky_region(dbcurs, obj, datet, ras, decs):
-    """Get region of sky using cache"""
     date = datet
     if isinstance(date, datetime.datetime):
         date = date.date()
-    map_for_date = remdefaults.skymap_file(obj, date)
-#     print("Looking for skymap", map_for_date, file=sys.stderr)
-    if os.path.exists(map_for_date):
-#         print("Found skymap file", file=sys.stderr)
-        result = load_cached_objs_from_file(map_for_date)
-    else:
-        nearest = remdefaults.nearest_skymap_file(obj, date)
-        if nearest is None:
-#             print("No nearest file", file=sys.stderr)
-            result = Cached_Objlist(obj)
-            result.get_all(dbcurs, date)
-        else:
-            nearest_file, nearest_date = nearest
-#             print("Nearest file is {:s} date {:x}".format(nearest_file, nearest_date), file=sys.stderr)
-            if abs((nearest_date - date).days) >= 365:
-#                 print("Recalc all", file=sys.stderr)
-                result = Cached_Objlist(obj)
-                result.get_all(dbcurs, date)
-            else:
-#                 print("Recalc for date {:x}".format(date), file=sys.stderr)
-                result = load_cached_objs_from_file(nearest_file)
-                result.adjust_proper_motions(nearest_date)
 
-        save_cached_objs_to_file(result, map_for_date)
+    # First get ourselves a list of objects
 
-    return  result.prune_region(ras, decs)
+    vicinity = get_objname(dbcurs, vicinity)
+    dbcurs.execute("SELECT ind FROM objdata WHERE suppress=0 AND vicinity=%s", vicinity)
+    objlist = []
+    for ind, in dbcurs.fetchall():
+        st = ObjData(ind=ind)
+        st.get(dbcurs)
+        objlist.append(st)
+
+    # Adjust coords for things with proper mtions
+    # First get any we've cached
+
+    cached_by_id = dict()
+    fmtdate = date.strftime("%Y-%m-%d")
+    dbcurs.execute("SELECT objpm.objind,objpm.radeg,objpm.decdeg,objpm.dist " \
+                   "FROM objpm INNER JOIN objdata " \
+                   "WHERE objpm.objind=objdata.ind " \
+                   "AND objpm.obsdate=%s " \
+                   "AND objdata.vicinity=%s", (fmtdate, vicinity))
+    for ind, radeg, decdeg, dist in dbcurs.fetchall():
+        cached_by_id[ind] = (radeg, decdeg, dist)
+
+    # Count ones we've added to cache
+
+    added = 0
+
+    for obj in objlist:
+        ind = obj.objind
+        try:
+            radeg, decdeg, dist = cached_by_id[ind]
+            obj.save_pos()
+            obj.ra = radeg
+            obj.dec = decdeg
+            obj.dist = dist
+            continue
+        except KeyError:
+            pass
+
+        # Not cached in DB, work it out and add to DB
+
+        obj.apply_motion(date)
+        fields = ["objind", "obsdate", "radeg", "decdeg" ]
+        values = [str(ind), dbcurs.connection.escape(fmtdate), str(obj.ra), str(obj.dec)]
+        if obj.dist is not None:
+            fields.append("dist")
+            values.append(str(dist))
+        dbcurs.execute("INSERT INTO objpm (" + ",".join(fields) + ") VALUES (" + ",".join(values) + ")")
+        cached_by_id[ind] = (obj.ra, obj.dec, obj.dist)
+        added += 1
+
+    return prune_objects(objlist, ras, decs)
