@@ -89,7 +89,7 @@ class ObjEdit_Newobj_Base(ObjEdit):
 class ObjEdit_Newobj_Ap(ObjEdit_Newobj_Base):
     """New object for when we are saving a given aperture"""
 
-    def __init__(self, row=0, col=0, name="", dispname="", radeg=0.0, decdeg=0.0, apsize=0):
+    def __init__(self, row=0, col=0, name="", dispname="", radeg=0.0, decdeg=0.0, apsize=0.0):
         super().__init__("create", row, col, name, dispname, radeg, decdeg)
         self.apsize = apsize
 
@@ -98,7 +98,7 @@ class ObjEdit_Newobj_Ap(ObjEdit_Newobj_Base):
         super().load(node)
         for child in node:
             if child.tag == "apsize":
-                self.apsize = xmlutil.getint(child)
+                self.apsize = xmlutil.getfloat(child)
                 break
 
     def save(self, doc, pnode, name):
@@ -185,9 +185,9 @@ class ObjEdit_Newdisp(ObjEdit_Exist_Base):
 class ObjEdit_Adjap(ObjEdit_Exist_Base):
     """When we are adjusting aperture to given"""
 
-    attr_list = dict(apsize=xmlutil.getint, adus=xmlutil.getfloat)
+    attr_list = dict(apsize=xmlutil.getfloat, adus=xmlutil.getfloat)
 
-    def __init__(self, oid=0, row=0, col=0, label="", apsize=0):
+    def __init__(self, oid=0, row=0, col=0, label="", apsize=0.0):
         super().__init__("adjap", oid, row, col, label)
         self.apsize = apsize
         self.adus = None

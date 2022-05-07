@@ -30,7 +30,7 @@ class ApOpt:
         for child in node:
             tagn = child.tag
             if tagn == "apsize":
-                self.apsize = xmlutil.getint(child)
+                self.apsize = xmlutil.getfloat(child)
             elif tagn == "objind":
                 self.objind = xmlutil.getint(child)
             elif tagn == "objname":

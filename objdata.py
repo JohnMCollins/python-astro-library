@@ -355,19 +355,33 @@ def get_sky_region(dbcurs, vicinity, datet, ras, decs):
         st.get(dbcurs)
         objlist.append(st)
 
-    # Adjust coords for things with proper mtions
-    # First get any we've cached
+    # Adjust coords for things with proper motions
+    # First get any we've marked as "slow-moving"
 
     cached_by_id = dict()
+
+    dbcurs.execute("SELECT objpm.objind,objpm.radeg,objpm.decdeg,objpm.dist " \
+                   "FROM objpm INNER JOIN objdata " \
+                   "WHERE objpm.objind=objdata.ind " \
+                   "AND objpm.slow!=0 " \
+                   "AND objdata.vicinity=%s", vicinity)
+
+    for ind, radeg, decdeg, dist in dbcurs.fetchall():
+        cached_by_id[ind] = (radeg, decdeg, dist)
+
+    # Next any that are cached with proper motion calculated for the date
+
     fmtdate = date.strftime("%Y-%m-%d")
     dbcurs.execute("SELECT objpm.objind,objpm.radeg,objpm.decdeg,objpm.dist " \
                    "FROM objpm INNER JOIN objdata " \
                    "WHERE objpm.objind=objdata.ind " \
                    "AND objpm.obsdate=%s " \
                    "AND objdata.vicinity=%s", (fmtdate, vicinity))
+
     for ind, radeg, decdeg, dist in dbcurs.fetchall():
         cached_by_id[ind] = (radeg, decdeg, dist)
 
+    # Now do the rest adding entries for the ones we look for.
     # Count ones we've added to cache
 
     added = 0
@@ -395,5 +409,8 @@ def get_sky_region(dbcurs, vicinity, datet, ras, decs):
         dbcurs.execute("INSERT INTO objpm (" + ",".join(fields) + ") VALUES (" + ",".join(values) + ")")
         cached_by_id[ind] = (obj.ra, obj.dec, obj.dist)
         added += 1
+
+    if added != 0:
+        dbcurs.connection.commit()
 
     return prune_objects(objlist, ras, decs)

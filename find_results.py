@@ -1,6 +1,7 @@
 """Classes for reesult finding as XML"""
 
 import os.path
+import math
 import xml.etree.ElementTree as ET
 import numpy as np
 import xmlutil
@@ -27,7 +28,7 @@ class FindResult:
                        decdeg=xmlutil.getfloat,
                        col=xmlutil.getint,
                        row=xmlutil.getint,
-                       apsize=xmlutil.getint,
+                       apsize=xmlutil.getfloat,
                        label=xmlutil.gettext,
                        adus=xmlutil.getfloat,
                        rdiff=xmlutil.getint,
@@ -41,7 +42,7 @@ class FindResult:
         self.col = self.row = None
         self.adus = self.radeg = self.decdeg = 0.0
         self.rdiff = self.cdiff = 0
-        self.apsize = 0
+        self.apsize = 0.0
         self.obj = None
         self.label = ""
         self.istarget = False
@@ -86,7 +87,7 @@ class FindResult:
         """Load from XNK dom"""
         self.col = self.row = None
         self.rdiff = self.cdiff = 0
-        self.apsize = 0
+        self.apsize = 0.0
         self.radeg = self.decdeg = 0.0
         self.adus = 0.0
         self.label = ""
@@ -236,18 +237,18 @@ class FindResults:
         self.imagedata = self.remfitsobj.data
         self.pixrows, self.pixcols = self.imagedata.shape
 
-        self.currentap = apsize
+        self.currentap = int(math.floor(apsize))
         self.apsq = apsize ** 2
-        self.minrow = self.mincol = apsize + 1
-        self.maxrow = self.pixrows - apsize  # This is actually 1 more
-        self.maxcol = self.pixcols - apsize  # This is actually 1 more
+        self.minrow = self.mincol = self.currentap + 1
+        self.maxrow = self.pixrows - self.currentap  # This is actually 1 more
+        self.maxcol = self.pixcols - self.currentap  # This is actually 1 more
 
     def makemask(self, apsize):
         """Make a mask for aperature of given radius"""
 
-        self.currentap = apsize
+        self.currentap = int(math.floor(apsize))
         self.mask = np.zeros_like(self.imagedata)
-        rads = np.add.outer((np.arange(0, self.pixrows) - apsize) ** 2, (np.arange(0, self.pixcols) - apsize) ** 2)
+        rads = np.add.outer((np.arange(0, self.pixrows) - self.currentap) ** 2, (np.arange(0, self.pixcols) - self.currentap) ** 2)
         rv, cv = np.where(rads <= apsize * apsize)
         for r, c in zip(rv, cv):
             self.mask.itemset((r, c), 1.0)
@@ -261,12 +262,13 @@ class FindResults:
 
         if apsize is None:
             apsize = self.currentap
-        side = apsize * 2 + 1
+        iapsize = int(math.floor(apsize))
+        side = iapsize * 2 + 1
         radsq = apsize * apsize
         self.mask = np.zeros((side, side), dtype=np.float32)
         for r in range(side):
             for c in range(side):
-                if (r - apsize) ** 2 + (c - apsize) ** 2 <= radsq:
+                if (r - iapsize) ** 2 + (c - iapsize) ** 2 <= radsq:
                     self.mask.itemset((r, c), 1.0)
 
         self.maskpoints = np.sum(self.mask)
@@ -350,7 +352,7 @@ class FindResults:
         self.expcol = col
         return  self.get_object_offsets(maxshift=searchp.maxshift)
 
-    def opt_aperture(self, row, col, searchp, minap=None, maxap=None):
+    def opt_aperture(self, row, col, searchp, minap=None, maxap=None, step=1.0):
         """Optimise aparture looking around either way from row and col,
         maximising aperture tbetween minap and maxap."""
 
@@ -359,7 +361,7 @@ class FindResults:
         if maxap is None:
             maxap = searchp.maxap
         results = []
-        for possap in range(minap, maxap + 1):
+        for possap in np.arange(minap, maxap + step):
             self.get_image_dims(possap)
             self.make_ap_mask(possap)
             # Store row offset, col offset, row, column, aperture, adus, adus per point

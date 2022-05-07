@@ -38,15 +38,15 @@ class ObjInfo:
         else:
             fvalues.append('0')
         fnames.append("apsize")
-        fvalues.append("{:d}".format(self.apsize))
+        fvalues.append("{:.4g}".format(self.apsize))
         fnames.append("irapsize")
-        fvalues.append("{:d}".format(self.irapsize))
+        fvalues.append("{:.4g}".format(self.irapsize))
         if self.apstd is not None:
             fnames.append("apstd")
-            fvalues.append("{:.6e}".format(self.apstd))
+            fvalues.append("{:.4e}".format(self.apstd))
         if self.irapstd is not None:
             fnames.append("irapstd")
-            fvalues.append("{:.6e}".format(self.irapstd))
+            fvalues.append("{:.4e}".format(self.irapstd))
         if self.basedon is not None:
             fnames.append("basedon")
             fvalues.append("{:.d}".format(self.basedon))
@@ -62,12 +62,12 @@ class ObjInfo:
             fields.append("usable=1")
         else:
             fields.append("usable=0")
-        fields.append("apsize={:d}".format(self.apsize))
-        fields.append("irapsize={:d}".format(self.irapsize))
+        fields.append("apsize={:.4g}".format(self.apsize))
+        fields.append("irapsize={:.4g}".format(self.irapsize))
         if self.apstd is not None:
-            fields.append("apstd={:.6e}".format(self.apstd))
+            fields.append("apstd={:.4e}".format(self.apstd))
         if self.irapstd is not None:
-            fields.append("irapstd={:.6e}".format(self.irapstd))
+            fields.append("irapstd={:.4e}".format(self.irapstd))
         if self.basedon is not None:
             fields.append("basedon={:d}".format(self.basedon))
         if self.irbasedon is not None:
@@ -85,9 +85,9 @@ class ObjInfo:
             if tagn == "objtype":
                 self.objtype = xmlutil.gettext(child)
             elif tagn == "apsize":
-                self.apsize = xmlutil.getint(child)
+                self.apsize = xmlutil.getfloat(child)
             elif tagn == "irapsize":
-                self.irapsize = xmlutil.getint(child)
+                self.irapsize = xmlutil.getfloat(child)
             elif tagn == "apstd":
                 self.apstd = xmlutil.getfloat(child)
             elif tagn == "irapstd":
