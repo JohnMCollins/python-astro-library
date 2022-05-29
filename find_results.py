@@ -326,7 +326,7 @@ class FindResults:
 
         return  sorted(sorted(results, key=lambda x: x[0] ** 2 + x[1] ** 2), reverse=True, key=lambda x: x[-1])
 
-    def find_object(self, objloc, searchp, eoffrow=0, eoffcol=0, apsize=None):
+    def find_object(self, objloc, searchp, eoffrow=0, eoffcol=0, apsize=None, finding_target=False):
         """Fins specific object from expected"""
         if apsize is None:
             apsize = objloc.apsize
@@ -338,7 +338,10 @@ class FindResults:
         self.make_ap_mask(apsize)
         self.exprow = objloc.row
         self.expcol = objloc.col
-        return  self.get_object_offsets(maxshift=searchp.maxshift, eoffrow=eoffrow, eoffcol=eoffcol)
+        maxs = searchp.maxshift2
+        if finding_target:
+            maxs = searchp.maxshift
+        return  self.get_object_offsets(maxshift=maxs, eoffrow=eoffrow, eoffcol=eoffcol)
 
     def find_peak(self, row, col, searchp, apsize=None):
         """Find peak for when we are giving a label to an object"""
@@ -352,7 +355,7 @@ class FindResults:
         self.expcol = col
         return  self.get_object_offsets(maxshift=searchp.maxshift)
 
-    def opt_aperture(self, row, col, searchp, minap=None, maxap=None, step=1.0):
+    def opt_aperture(self, row, col, searchp, minap=None, maxap=None, step=None):
         """Optimise aparture looking around either way from row and col,
         maximising aperture tbetween minap and maxap."""
 
@@ -360,8 +363,10 @@ class FindResults:
             minap = searchp.minap
         if maxap is None:
             maxap = searchp.maxap
+        if step is None:
+            step = searchp.apstep
         results = []
-        for possap in np.arange(minap, maxap + step):
+        for possap in np.arange(minap, maxap + step, step):
             self.get_image_dims(possap)
             self.make_ap_mask(possap)
             # Store row offset, col offset, row, column, aperture, adus, adus per point

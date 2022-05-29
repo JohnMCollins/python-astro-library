@@ -178,7 +178,7 @@ class ObjData(objparam.ObjParam):
             try:
                 self.check_valid_id(check_vicinity=False)
             except objident.ObjIdentErr as e:
-                raise ObjDataError(e.getmessage())
+                raise ObjDataError(*e.args)
             selector = "objname=" + dbcurs.connection.escape(get_objname(dbcurs, self.objname, allobj=True))
             name = self.objname
 
@@ -351,7 +351,7 @@ def get_sky_region(dbcurs, vicinity, datet, ras, decs):
     dbcurs.execute("SELECT ind FROM objdata WHERE suppress=0 AND vicinity=%s", vicinity)
     objlist = []
     for ind, in dbcurs.fetchall():
-        st = ObjData(ind=ind)
+        st = ObjData(objind=ind)
         st.get(dbcurs)
         objlist.append(st)
 
@@ -405,7 +405,7 @@ def get_sky_region(dbcurs, vicinity, datet, ras, decs):
         values = [str(ind), dbcurs.connection.escape(fmtdate), str(obj.ra), str(obj.dec)]
         if obj.dist is not None:
             fields.append("dist")
-            values.append(str(dist))
+            values.append(str(obj.dist))
         dbcurs.execute("INSERT INTO objpm (" + ",".join(fields) + ") VALUES (" + ",".join(values) + ")")
         cached_by_id[ind] = (obj.ra, obj.dec, obj.dist)
         added += 1

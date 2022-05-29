@@ -9,10 +9,12 @@ import configfile
 DEFAULT_SIGN = 1.5
 DEFAULT_TOTSIGN = .75
 DEFAULT_MAXSHIFT = 10
+DEFAULT_SHIFT2 = 5
 DEFAULT_LOOKAROUND = 3
 DEFAULT_DEFAPSIZE = 6
 DEFAULT_MINAP = 3
 DEFAULT_MAXAP = 20
+DEFAULT_APSTEP = 1
 
 
 class SearchParamErr(Exception):
@@ -30,7 +32,11 @@ Field_names = dict(signif=(xmlutil.getfloat,
                     maxshift=(xmlutil.getint,
                                int,
                                DEFAULT_MAXSHIFT,
-                               "Max displacement from expected position to consider "),
+                               "Max displacement from expected position to consider on initial search "),
+                    maxshift2=(xmlutil.getint,
+                               int,
+                               DEFAULT_SHIFT2,
+                               "Max displacement from expected position to consider on subsequent search "),
                     lookaround=(xmlutil.getint,
                                 int,
                                 DEFAULT_LOOKAROUND,
@@ -46,7 +52,11 @@ Field_names = dict(signif=(xmlutil.getfloat,
                    maxap=(xmlutil.getfloat,
                             float,
                             DEFAULT_MAXAP,
-                            "Maximum aperture size when optimising aperture"))
+                            "Maximum aperture size when optimising aperture"),
+                   apstep=(xmlutil.getfloat,
+                            float,
+                            DEFAULT_APSTEP,
+                            "Step in aperture size when optimising aperture"))
 
 
 class SearchParam:
@@ -60,6 +70,7 @@ class SearchParam:
         self.defapsize = DEFAULT_DEFAPSIZE
         self.minap = DEFAULT_MINAP
         self.maxap = DEFAULT_MAXAP
+        self.apstep = DEFAULT_APSTEP
         self.saveparams = False
 
     def load(self, node):
