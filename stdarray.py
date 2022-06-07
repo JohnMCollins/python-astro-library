@@ -1,6 +1,9 @@
 """Classes for reesult finding as XML"""
 
 import warnings
+import math
+import gzip
+import io
 import numpy as np
 
 # Error types
@@ -9,6 +12,8 @@ NOT_INITIALISED = -1
 INCOMPAT_SHAPE = -2
 DIVBYZERO = -3
 INIT_ERROR = -4
+UNKNOWN_OPERAND = -5
+INVALID_FILE = -6
 
 
 class StdArrayErr(Exception):
@@ -19,65 +24,195 @@ class StdArrayErr(Exception):
         super().__init__(*args)
 
 
+class StdScalar:
+    """Class for saving value/std values"""
+
+    def __init__(self, value=0.0, std=0.0, stdsq=None):
+        self.value = value
+        if stdsq is None:
+            self.stdsq = std ** 2
+        else:
+            self.stdsq = stdsq
+
+    def get_value(self):
+        """Get the value on its own"""
+        return  self.value
+
+    def get_std(self):
+        """Get std deviation"""
+        return  math.sqrt(self.stdsq)
+
+    def __add__(self, other):
+        if np.isscalar(other):
+            return  StdScalar(self.value + other, stdsq=self.stdsq)
+        if isinstance(other, StdScalar):
+            return  StdScalar(self.value + other.value, self.stdsq + other.stdsq)
+        if isinstance(other, StdArray):
+            return  StdArray(values=self.value + other.values, stdsq=self.stdsq + other.stdsq)
+        raise  StdArrayErr(UNKNOWN_OPERAND, "Unknown second operand in add")
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __iadd__(self, other):
+        if np.isscalar(other):
+            self.value += other
+        elif isinstance(other, StdArray):
+            raise StdArrayErr(INCOMPAT_SHAPE, "Cannot increment/add with RHS array")
+        else:
+            self.value += other.value
+            self.stdsq += other.stdsq
+        return self
+
+    def __sub__(self, other):
+        if np.isscalar(other):
+            return  StdScalar(self.value - other, stdsq=self.stdsq)
+        if isinstance(other, StdScalar):
+            return  StdScalar(self.value - other.value, self.stdsq + other.stdsq)
+        if isinstance(other, StdArray):
+            return  StdArray(values=self.value - other.values, stdsq=self.stdsq + other.stdsq)
+        raise  StdArrayErr(UNKNOWN_OPERAND, "Unknown second operand in subtract")
+
+    def __rsub__(self, other):
+        if np.isscalar(other):
+            return  StdScalar(other - self.value, stdsq=self.stdsq)
+        raise  StdArrayErr(UNKNOWN_OPERAND, "Unknown first operand in subtract")
+
+    def __isub__(self, other):
+        if np.isscalar(other):
+            self.value -= other
+        elif isinstance(other, StdArray):
+            raise StdArrayErr(INCOMPAT_SHAPE, "Cannot decrement/subtractwith RHS array")
+        else:
+            self.value -= other.value
+            self.stdsq += other.stdsq
+        return  self
+
+    def __mul__(self, other):
+        if np.isscalar(other):
+            return  StdScalar(self.value * other, stdsq=self.stdsq * other ** 2)
+        if isinstance(other, StdScalar):
+            return  StdScalar(self.value * other.value, stdsq=self.stdsq * other.value ** 2 + other.stdsq * self.value ** 2)
+        if isinstance(other, StdArray):
+            return  StdArray(values=self.value * other.values, stdsq=self.stdsq * other.values ** 2 + other.stdsq * self.value ** 2)
+        raise  StdArrayErr(UNKNOWN_OPERAND, "Unknown second operand in multiply")
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __imul__(self, other):
+        if np.isscalar(other):
+            self.value *= other
+            self.stdsq *= other * other
+        elif isinstance(other, StdArray):
+            raise StdArrayErr(INCOMPAT_SHAPE, "Cannot multiply with RHS array")
+        else:
+            self.stdsq = self.stdsq * other.value ** 2 + other.stdsq * self.value ** 2
+            self.value *= other.value
+        return  self
+
+    def __truediv__(self, other):
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', RuntimeWarning)
+            if np.isscalar(other):
+                return  StdScalar(self.value / other, stdsq=self.stdsq / other ** 2)
+            if isinstance(other, StdScalar):
+                val = self.value / other.value
+                return  StdScalar(val, stdsq=(self.stdsq + val ** 2 * other.stdsq) / other.value ** 2)
+            if isinstance(other, StdArray):
+                val = self.value / other.values
+                return  StdArray(values=val, stdsq=(self.stdsq + val ** 2 * other.stdsq) / other.values ** 2)
+        raise  StdArrayErr(UNKNOWN_OPERAND, "Unknown second operand in divide")
+
+    def __rtruediv__(self, other):
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', RuntimeWarning)
+            if np.isscalar(other):
+                return  StdScalar(other / self.value, stdsq=other ** 2 / self.stdsq ** 4)
+        raise  StdArrayErr(UNKNOWN_OPERAND, "Unknown first operand in divide")
+
+    def __itruediv__(self, other):
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', RuntimeWarning)
+            if np.isscalar(other):
+                self.value /= other
+                self.stdsq /= other ** 2
+            elif isinstance(other, StdArray):
+                raise StdArrayErr(INCOMPAT_SHAPE, "Cannot multiply with RHS array")
+            else:
+                self.value = val = self.value / other.value
+                self.stdsq = (self.stdsq + val ** 2 * other.stdsq) / other.value ** 2
+        return  self
+
+
+def get_a_shape(*args):
+    """Get shape from one of possible ndarray args"""
+    for arg in args:
+        try:
+            return  arg.shape
+        except AttributeError:
+            pass
+    return  None
+
+
 class StdArray:
     """Class for processubg image array with tracking of std errors"""
 
-    def __init__(self, rows=None, cols=None, shape=None, values=None, stddevs=None):
+    def __init__(self, rows=None, cols=None, shape=None, values=None, stddevs=None, stdsq=None):
 
-        # Specify dims as tuple or rows and cols
+        # First get shape - complaining if something clashes
 
-        try:
-            rows, cols = shape
-        except ValueError:
-            raise StdArrayErr(INIT_ERROR, "Incompatible shape expecting 2D")
-        except TypeError:
-            pass
-
-        if values is not None:
-            if stddevs is None:
-                raise StdArrayErr(INIT_ERROR, "Values given but not stderr")
-            dshape = None
-            if np.isscalar(values):
-                if np.isscalar(stddevs):
-                    if rows is None or cols is None:
-                        raise StdArrayErr(INIT_ERROR, "No rows and columns given")
-                else:
-                    dshape = stddevs.shape
+        if shape is None:
+            if rows is None or cols is None:
+                self.shape = get_a_shape(values, stddevs, stdsq)
+                if  self.shape is None:
+                    raise StdArrayErr(INIT_ERROR, "Cannot find shape")
             else:
-                dshape = values.shape
-                if not np.isscalar(stddevs):
-                    if dshape != stddevs.shape:
-                        raise StdArrayErr(INIT_ERROR, "Values and stderr shapes do not match")
-            if rows is None or cols is None:
-                try:
-                    rows, cols = dshape
-                except TypeError:
-                    raise StdArrayErr(INIT_ERROR, "No rows and columns given with scalars")
-                except ValueError:
-                    raise StdArrayErr(INIT_ERROR, "Expecting 2D shapes")
+                self.shape = (rows, cols)
         else:
-            if stddevs is not None:
-                raise StdArrayErr(INIT_ERROR, "Stderr given but not values")
-            if rows is None or cols is None:
-                raise StdArrayErr(INIT_ERROR, "Size of array not given")
+            self.shape = shape
+            if rows is not None or cols is not None:
+                if  (rows, cols) != shape:
+                    raise StdArrayErr(INIT_ERROR, "Specified shape does not match specified row/cols")
 
-        # Now actually do business
+        if isinstance(values, np.ndarray) and values.shape != self.shape:
+            raise StdArrayErr(INIT_ERROR, "Values shape does not match specified shape")
+        if isinstance(stddevs, np.ndarray) and stddevs.shape != self.shape:
+            raise StdArrayErr(INIT_ERROR, "Stddevs shape does not match specified shape")
+        if isinstance(stdsq, np.ndarray) and stdsq.shape != self.shape:
+            raise StdArrayErr(INIT_ERROR, "Stdsq shape does not match specified shape")
 
-        self.shape = (rows, cols)
-
+        self.values = self.stdsq = None
         if values is None:
-            self.values = None
-        elif np.isscalar(values):
+            return
+
+        # Get values now, worry about stdsq in a minute
+
+        if np.isscalar(values):
             self.values = np.full(self.shape, values, dtype=np.float64)
+        elif isinstance(values, StdScalar):
+            self.values = np.full(self.shape, values.value, dtype=np.float64)
+            self.stdsq = np.full(self.shape, values.stdsq, dtype=np.float64)
         else:
             self.values = values.copy()
 
-        if stddevs is None:
-            self.stdsq = None
-        elif np.isscalar(stddevs):
-            self.stdsq = np.full(self.shape, stddevs ** 2, dtype=np.float64)
+        if self.stdsq is not None:
+            if stddevs is not None or stdsq is not None:
+                raise StdArrayErr(INIT_ERROR, "Stdscalr value and stddevs supplied")
+        elif stddevs is not None:
+            if stdsq is not None:
+                raise StdArrayErr(INIT_ERROR, "Cannot give both stddevs and stdsq")
+            if np.isscalar(stddevs):
+                self.stdsq = np.full(self.shape, stddevs ** 2, dtype=np.float64)
+            else:
+                self.stdsq = stddevs ** 2
         else:
-            self.stdsq = stddevs ** 2
+            if stdsq is None:
+                raise StdArrayErr(INIT_ERROR, "No error term given")
+            if np.isscalar(stdsq):
+                self.stdsq = np.full(self.shape, stdsq, dtype=np.float64)
+            else:
+                self.stdsq = stdsq.copy()
 
     def get_values(self):
         """Get the values array"""
@@ -91,12 +226,15 @@ class StdArray:
             raise StdArrayErr(NOT_INITIALISED, "Arrays not set up yet")
         return  np.sqrt(self.stdsq)
 
-    def set_values(self, values=None, stddevs=None):
+    def set_values(self, values=None, stddevs=None, stdsq=None):
         """Set values in array"""
 
         if values is not None:
             if np.isscalar(values):
                 self.values = np.full(self.shape, values, dtype=np.float64)
+            elif isinstance(values, StdScalar):
+                self.values = np.full(self.shape, values.value, dtype=np.float64)
+                self.stdsq = np.full(self.shape, values.stdsq, dtype=np.float64)
             else:
                 if values.shape != self.shape:
                     raise StdArrayErr(INCOMPAT_SHAPE, "Assigned value does not match current shape")
@@ -110,27 +248,29 @@ class StdArray:
                     raise StdArrayErr(INCOMPAT_SHAPE, "Assigned stddevs does not match current shape")
                 self.stdsq = stddevs ** 2
 
+        if stdsq is not None:
+            if np.isscalar(stdsq):
+                self.stdsq = np.full(self.shape, stdsq, dtype=np.float64)
+            else:
+                if stdsq.shape != self.shape:
+                    raise StdArrayErr(INCOMPAT_SHAPE, "Assigned stdsq does not match current shape")
+                self.stdsq = stdsq
+
         return  self
 
     def __add__(self, other):
-        newinst = StdArray(shape=self.shape)
-        if np.isscalar(other):
-            try:
-                newinst.values = self.values + other
-                newinst.stdsq = self.stdsq.copy()
-            except TypeError:
-                newinst.values = np.full(self.shape, other, dtype=np.float64)
-                newinst.stdsq = np.zeros(self.shape, dtype=np.float64)
-        else:
-            try:
-                newinst.values = self.values + other.values
-                newinst.stdsq = self.stdsq + other.stdsq
-            except TypeError:
-                newinst.values = other.values.copy()
-                newinst.stdsq = other.stdsq.copy()
-            except ValueError:
-                raise StdArrayErr(INCOMPAT_SHAPE, "Incompatible arguement types")
-        return  newinst
+        try:
+            if  np.isscalar(other):
+                return  StdArray(values=self.values + other, stdsq=self.stdsq)
+            if  isinstance(other, StdScalar):
+                return  StdArray(values=self.values + other.value, stdsq=self.stdsq + other.stdsq)
+            if isinstance(other, StdArray):
+                return  StdArray(values=self.values + other.values, stdsq=self.stdsq + other.stdsq)
+            raise  StdArrayErr(UNKNOWN_OPERAND, "Unknown second operand in add")
+        except TypeError:
+            raise StdArrayErr(NOT_INITIALISED, "Stdarray not fully set up")
+        except ValueError:
+            raise StdArrayErr(INCOMPAT_SHAPE, "Incompatible arguement types")
 
     def __radd__(self, other):
         return self.__add__(other)
@@ -139,6 +279,9 @@ class StdArray:
         try:
             if np.isscalar(other):
                 self.values += other
+            elif isinstance(other, StdScalar):
+                self.values += other.value
+                self.stdsq += other.stdsq
             else:
                 self.values += other.values
                 self.stdsq += other.stdsq
@@ -149,49 +292,38 @@ class StdArray:
         return self
 
     def __sub__(self, other):
-        newinst = StdArray(shape=self.shape)
-        if np.isscalar(other):
-            try:
-                newinst.values = self.values - other
-                newinst.stdsq = self.stdsq.copy()
-            except TypeError:
-                newinst.values = np.full(self.shape, -other, dtype=np.float64)
-                newinst.stdsq = np.zeros(self.shape, dtype=np.float64)
-        else:
-            try:
-                newinst.values = self.values - other.values
-                newinst.stdsq = self.stdsq + other.stdsq
-            except TypeError:
-                newinst.values = -other.values
-                newinst.stdsq = other.stdsq.copy()
-            except ValueError:
-                raise StdArrayErr(INCOMPAT_SHAPE, "Incompatible arguement types")
-        return  newinst
+        try:
+            if  np.isscalar(other):
+                return  StdArray(values=self.values - other, stdsq=self.stdsq)
+            if  isinstance(other, StdScalar):
+                return  StdArray(values=self.values - other.value, stdsq=self.stdsq + other.stdsq)
+            if isinstance(other, StdArray):
+                return  StdArray(values=self.values - other.values, stdsq=self.stdsq + other.stdsq)
+            raise  StdArrayErr(UNKNOWN_OPERAND, "Unknown second operand in subtract")
+        except TypeError:
+            raise StdArrayErr(NOT_INITIALISED, "Stdarray not fully set up")
+        except ValueError:
+            raise StdArrayErr(INCOMPAT_SHAPE, "Incompatible arguement types")
 
     def __rsub__(self, other):
-        newinst = StdArray(shape=self.shape)
-        if np.isscalar(other):
-            try:
-                newinst.values = other - self.values
-                newinst.stdsq = self.stdsq.copy()
-            except TypeError:
-                newinst.values = np.full(self.shape, other, dtype=np.float64)
-                newinst.stdsq = np.zeros(self.shape, dtype=np.float64)
-        else:
-            try:
-                newinst.values = other.values - self.values
-                newinst.stdsq = self.stdsq + other.stdsq
-            except TypeError:
-                newinst.values = other.values.copy()
-                newinst.stdsq = other.stdsq.copy()
-            except ValueError:
-                raise StdArrayErr(INCOMPAT_SHAPE, "Incompatible arguement types")
-        return  newinst
+        try:
+            if np.isscalar(other):
+                return StdArray(values=other - self.values, stdsq=self.stdsq)
+            if isinstance(other, StdArray):
+                return  StdArray(values=other.values - self.values, stdsq=self.stdsq + other.stdsq)
+            raise  StdArrayErr(UNKNOWN_OPERAND, "Unknown second operand in subtract")
+        except TypeError:
+            raise StdArrayErr(NOT_INITIALISED, "Stdarray not fully set up")
+        except ValueError:
+            raise StdArrayErr(INCOMPAT_SHAPE, "Incompatible arguement types")
 
     def __isub__(self, other):
         try:
             if np.isscalar(other):
                 self.values -= other
+            elif isinstance(other, StdScalar):
+                self.values -= other.value
+                self.stdsq += other.stdsq
             else:
                 self.values -= other.values
                 self.stdsq += other.stdsq
@@ -202,19 +334,18 @@ class StdArray:
         return  self
 
     def __mul__(self, other):
-        newinst = StdArray(shape=self.shape)
         try:
-            if np.isscalar(other):
-                newinst.values = self.values * other
-                newinst.stdsq = self.stdsq * other ** 2
-            else:
-                newinst.values = self.values * other.values
-                newinst.stdsq = self.stdsq * other.values ** 2 + other.stdsq * self.values ** 2
+            if  np.isscalar(other):
+                return  StdArray(values=self.values * other, stdsq=self.stdsq * other ** 2)
+            if  isinstance(other, StdScalar):
+                return  StdArray(values=self.values * other.value, stdsq=self.stdsq * other.value ** 2 + other.stdsq * self.values ** 2)
+            if isinstance(other, StdArray):
+                return  StdArray(values=self.values * other.values, stdsq=self.stdsq * other.values ** 2 + other.stdsq * self.values ** 2)
+            raise  StdArrayErr(UNKNOWN_OPERAND, "Unknown second operand in multiply")
         except TypeError:
-            raise StdArrayErr(NOT_INITIALISED, "Array not initialised")
+            raise StdArrayErr(NOT_INITIALISED, "Stdarray not fully set up")
         except ValueError:
             raise StdArrayErr(INCOMPAT_SHAPE, "Incompatible arguement types")
-        return  newinst
 
     def __rmul__(self, other):
         return self.__mul__(other)
@@ -224,6 +355,9 @@ class StdArray:
             if np.isscalar(other):
                 self.values *= other
                 self.stdsq *= other * other
+            elif isinstance(other, StdScalar):
+                self.stdsq = self.stdsq * other.value ** 2 + other.stdsq * self.values ** 2
+                self.values *= other.value
             else:
                 self.stdsq = self.stdsq * other.values ** 2 + other.stdsq * self.values ** 2
                 self.values *= other.values
@@ -234,42 +368,42 @@ class StdArray:
         return  self
 
     def __truediv__(self, other):
-        newinst = StdArray(shape=self.shape)
         with warnings.catch_warnings():
             warnings.simplefilter('error', RuntimeWarning)
             try:
                 if np.isscalar(other):
-                    newinst.values = self.values / other
-                    newinst.stdsq = self.stdsq / other ** 2
-                else:
-                    newinst.values = self.values / other.values
-                    newinst.stdsq = (self.stdsq + newinst.values ** 2 * other.stdsq) / other.values ** 2
+                    return  StdArray(values=self.values / other, stdsq=self.stdsq / other ** 2)
+                if isinstance(other, StdScalar):
+                    val = self.values / other.value
+                    return  StdArray(values=val, stdsq=(self.stdsq + val ** 2 * other.stdsq) / other.value ** 2)
+                if isinstance(other, StdArray):
+                    val = self.values / other.values
+                    return  StdArray(values=val, stdsq=(self.stdsq + val ** 2 * other.stdsq) / other.values ** 2)
             except TypeError:
                 raise StdArrayErr(NOT_INITIALISED, "Array not initialised")
             except ValueError:
                 raise StdArrayErr(INCOMPAT_SHAPE, "Incompatible arguement types")
-            except RuntimeWarning:
-                raise StdArrayErr(DIVBYZERO, "Division by zero")
-        return  newinst
+        raise  StdArrayErr(UNKNOWN_OPERAND, "Unknown second operand in divide")
 
     def __rtruediv__(self, other):
-        newinst = StdArray(shape=self.shape)
         with warnings.catch_warnings():
             warnings.simplefilter('error', RuntimeWarning)
             try:
                 if np.isscalar(other):
-                    newinst.values = other / self.values
-                    newinst.stdsq = other ** 2 / self.stdsq ** 4
-                else:
-                    newinst.values = other.values / self.values
-                    newinst.stdsq = (other.stdsq + newinst.values ** 2 * self.stdsq) / self.values ** 2
+                    return  StdArray(values=other / self.values, stdsq=other ** 2 / self.stdsq ** 4)
+                if isinstance(other, StdScalar):
+                    val = other.value / self.values
+                    return  StdArray(values=val, stdsq=(other.stdsq + val ** 2 * self.stdsq) / self.values ** 2)
+                if isinstance(other, StdArray):
+                    val = other.values / self.values
+                    return  StdArray(values=val, stdsq=(other.stdsq + val ** 2 * self.stdsq) / self.values ** 2)
+                raise  StdArrayErr(UNKNOWN_OPERAND, "Unknown first operand in divide")
             except TypeError:
                 raise StdArrayErr(NOT_INITIALISED, "Array not initialised")
             except ValueError:
                 raise StdArrayErr(INCOMPAT_SHAPE, "Incompatible arguement types")
             except RuntimeWarning:
                 raise StdArrayErr(DIVBYZERO, "Division by zero")
-        return  newinst
 
     def __itruediv__(self, other):
         with warnings.catch_warnings():
@@ -278,6 +412,9 @@ class StdArray:
                 if np.isscalar(other):
                     self.values /= other
                     self.stdsq /= other ** 2
+                elif isinstance(other, StdScalar):
+                    self.values /= other.value
+                    self.stdsq = (self.stdsq + self.values ** 2 * other.stdsq) / other.value ** 2
                 else:
                     self.values /= other.values
                     self.stdsq = (self.stdsq + self.values ** 2 * other.stdsq) / other.values ** 2
@@ -288,3 +425,30 @@ class StdArray:
             except RuntimeWarning:
                 raise StdArrayErr(DIVBYZERO, "Division by zero")
         return  self
+
+    def load(self, bytestring):
+        """Do in-memory load of bytestring to object"""
+        try:
+            parts = np.load(io.BytesIO(gzip.decompress(bytestring)))
+        except (ValueError, gzip.BadGzipFile):
+            raise StdArrayErr(INVALID_FILE, "Invalid save file rormat")
+
+        try:
+            self.values, self.stdsq = parts
+        except ValueError:
+            raise StdArrayErr(INVALID_FILE, "Invalid save file parts")
+
+        self.shape = self.values.shape
+        return  self
+
+    def save(self):
+        """Do in memory save of bytestring to object"""
+
+        try:
+            parts = np.array([self.values, self.stdsq])
+        except ValueError:
+            raise StdArrayErr(NOT_INITIALISED, "Array is not initialised")
+
+        f = io.BytesIO()
+        np.save(f, parts)
+        return  gzip.compress(f.getvalue())

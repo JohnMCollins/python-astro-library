@@ -2,9 +2,11 @@
 
 # import sys
 import re
+import warnings
 from astropy.time import Time
 from astropy.io import fits
 import numpy as np
+import remdefaults
 import remget
 import fitsops
 import wcscoord
@@ -61,7 +63,8 @@ class Pixoffsets:
         dbcurs.execute("SELECT rowoffset,coloffset FROM obsinf WHERE obsind={:d}".format(self.obsind))
         rows = dbcurs.fetchall()
         if len(rows) != 1:
-            raise RemFitsErr("Unknoew obsind {:d} in get_offsets".format(self.obsind))
+            warnings.warn("Unknown obsind {:d} in get_offsets".format(self.obsind), UserWarning, stacklevel=3)
+            return  False
         self.rowoffset, self.coloffset = rows[0]
         return  self.rowoffset is not None and self.coloffset is not None
 
@@ -199,7 +202,10 @@ class RemFitsHdr:
                 self.ncolumns = self.endx - self.startx
                 self.nrows = self.endy - self.starty
             except KeyError as e:
-                raise RemFitsErr(e.args[0])
+                warnings.warn("Had to insert geometry", UserWarning, stacklevel=5)
+                self.startx, self.starty, self.ncolumns, self.nrows = remdefaults.get_geom(self.date, self.filter)
+                self.endx = self.startx + self.ncolumns
+                self.endy = self.starty + self.nrows
 
             if self.startx >= 1024:
                 if self.filter not in 'gr':
