@@ -4,6 +4,7 @@ import os.path
 import math
 import xml.etree.ElementTree as ET
 import numpy as np
+import scipy.optimize as opt
 import xmlutil
 import remdefaults
 import objident
@@ -15,6 +16,12 @@ FINDRES_DOC_ROOT = "Findres2"
 
 DEFAULT_SIGN = 1.5
 DEFAULT_TOTSIGN = .75
+
+
+def twod_gaussian(pts, amp, sigma):
+    """Compute 2D gaussian (would be generaliable for nD) with given amplitude and sigma"""
+    xpts, ypts = pts
+    return  amp * np.exp((xpts ** 2 + ypts ** 2) / (-2.0 * sigma ** 2))
 
 
 class FindResultErr(Exception):
@@ -242,20 +249,6 @@ class FindResults:
         self.minrow = self.mincol = self.currentap + 1
         self.maxrow = self.pixrows - self.currentap  # This is actually 1 more
         self.maxcol = self.pixcols - self.currentap  # This is actually 1 more
-
-    def makemask(self, apsize):
-        """Make a mask for aperature of given radius"""
-
-        self.currentap = int(math.floor(apsize))
-        self.mask = np.zeros_like(self.imagedata)
-        rads = np.add.outer((np.arange(0, self.pixrows) - self.currentap) ** 2, (np.arange(0, self.pixcols) - self.currentap) ** 2)
-        rv, cv = np.where(rads <= apsize * apsize)
-        for r, c in zip(rv, cv):
-            self.mask.itemset((r, c), 1.0)
-        self.maskpoints = np.sum(self.mask)
-        self.skylevpoints = self.maskpoints * self.remfitsobj.meanval
-        self.min_singlepix = self.remfitsobj.meanval + self.signif * self.remfitsobj.stdval
-        self.min_apertureadus = self.maskpoints * self.remfitsobj.stdval * self.totsignif
 
     def make_ap_mask(self, apsize=None):
         """Make a mask of right size only for aperature of given radius"""
