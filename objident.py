@@ -15,11 +15,11 @@ class ObjIdentErr(Exception):
 class ObjIdent:
     """Contains name, display name and object index in database of known object"""
 
-    ObjIdent_attr = ('dispname', 'vicinity', 'objind')
+    ObjIdent_attr = ('dispname', 'vicinity', 'objind', 'label')
     ObjIdent_strings = ('objname', 'dispname', 'vicinity')
 
     def __init__(self, **kwargs):
-        self.objname = self.dispname = self.vicinity = None
+        self.objname = self.dispname = self.vicinity = self.label = None
         self.objind = 0
         self.invented = False
         try:
@@ -55,6 +55,10 @@ class ObjIdent:
         if check_objind and self.objind == 0:
             raise ObjIdentErr("Invalid identifier", "No object id")
 
+    def valid_label(self):
+        """Report if object has valid label - uppercase letter"""
+        return  self.label is not None and self.label.isupper()
+
     def fix_dispname(self):
         """Fix dispname to be the same as the object name if we haven't got it"""
         if self.dispname is None:
@@ -83,6 +87,9 @@ class ObjIdent:
             if val is not None:
                 fnames.append(n)
                 fvalues.append(conn.escape(val))
+        if self.valid_label():
+            fnames.append("label")
+            fvalues.append(conn.escape(self.label))
         fnames.append('invented')
         if self.invented:
             fvalues.append('1')
@@ -94,6 +101,10 @@ class ObjIdent:
         conn = dbcurs.connection
         for n in ObjIdent.ObjIdent_strings:
             fields.append(n + "=" + conn.escape(getattr(self, n)))
+        if self.valid_label():
+            fields.append("label="+conn.escape(self.label))
+        else:
+            fields.append("label=NULL")
         if self.invented:
             fields.append("invented=1")
         else:
@@ -101,12 +112,12 @@ class ObjIdent:
 
     def load_ident(self, node):
         """Load from XML DOM node"""
-        self.objname = self.dispname = self.vicinity = None
+        self.objname = self.dispname = self.vicinity = self.label = None
         self.objind = 0
         self.invented = xmlutil.getboolattr(node, "invented")
         for child in node:
             tagn = child.tag
-            if tagn in ObjIdent.ObjIdent_strings:
+            if tagn in ObjIdent.ObjIdent_strings + ("label",):
                 setattr(self, tagn, xmlutil.gettext(child))
             elif tagn == "objind":
                 self.objind = xmlutil.getint(child)
@@ -128,3 +139,5 @@ class ObjIdent:
 
         if self.vicinity is not None:
             xmlutil.savedata(doc, node, "vicinity", self.vicinity)
+        if self.valid_label():
+            xmlutil.savedata(doc, node, "label", self.label)

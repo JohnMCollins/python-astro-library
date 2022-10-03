@@ -51,7 +51,7 @@ class ObjMags:
         for f in Database_fields:
             try:
                 fields.append("{:s}={:.6e}".format(f, getattr(self, f)))
-            except AttributeError:
+            except (AttributeError, TypeError):
                 pass
 
     def load_mags(self, node):

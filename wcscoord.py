@@ -13,7 +13,11 @@ from astropy import wcs
 
 
 class wcscoord:
-    """Class to manage WGC coord lookups"""
+    """Class to manage WGC coord lookups
+
+    For the avoidance of doubt:
+
+    Offsets give where WCS expects them to be minus where they are in the array."""
 
     def __init__(self, fitshdr):
 

@@ -252,8 +252,8 @@ class RemFits(RemFitsHdr):
         """Set data to standard format"""
         if (self.nrows, self.ncolumns) < self.data.shape:
             self.data = self.data[0:self.nrows, 0:self.ncolumns]
-        if self.data.dtype != np.float32:
-            self.data = self.data.astype(np.float32)
+        if self.data.dtype != np.float64:
+            self.data = self.data.astype(np.float64)
         self.meanval = self.data.mean()
         self.stdval = self.data.std()
 
@@ -269,13 +269,13 @@ class RemFits(RemFitsHdr):
         if pixoff.get_offsets(dbcurs):
 #             print("get_offsets returned col/row {:d}/{:d}".format(pixoff.coloffset, pixoff.rowoffset), file=sys.stderr)
             self.pixoff = pixoff
-            self.wcs.accum_offsets(-pixoff.coloffset, -pixoff.rowoffset)
+            self.wcs.accum_offsets(pixoff.coloffset, pixoff.rowoffset)
         return  self
 
     def load_from_fits(self, fname):
         """Load and fill up from specified file"""
         try:
-            ff = fits.open(miscutils.addsuffix(fname, 'fits.gz'))
+            ff = fits.open(miscutils.replacesuffix(fname, 'fits.gz'))
         except OSError as e:
             if e.strerror is None:
                 raise RemFitsErr(fname + " is not a valid FITS file")

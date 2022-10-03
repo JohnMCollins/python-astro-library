@@ -14,6 +14,9 @@ DIVBYZERO = -3
 INIT_ERROR = -4
 UNKNOWN_OPERAND = -5
 INVALID_FILE = -6
+INVALID_ROW = -7
+INVALID_COL = -8
+IOERROR = -9
 
 
 class StdArrayErr(Exception):
@@ -208,8 +211,8 @@ class StdArray:
                 self.stdsq = stddevs ** 2
         else:
             if stdsq is None:
-                raise StdArrayErr(INIT_ERROR, "No error term given")
-            if np.isscalar(stdsq):
+                self.stdsq = np.zeros_like(self.values)
+            elif np.isscalar(stdsq):
                 self.stdsq = np.full(self.shape, stdsq, dtype=np.float64)
             else:
                 self.stdsq = stdsq.copy()
@@ -257,6 +260,25 @@ class StdArray:
                 self.stdsq = stdsq
 
         return  self
+
+    def get_rectangle(self, row, col, halfwidth):
+        """Get rectangle centred on row col, halfwidth as given not including central point"""
+        if self.values is None:
+            raise StdArrayErr(NOT_INITIALISED, "Arrays not set up yet")
+        hwp1 = halfwidth + 1
+        if row - halfwidth < 0  or  row + hwp1 >= self.shape[0]:
+            raise StdArrayErr(INVALID_ROW, "Row out of range", row)
+        if col - halfwidth < 0  or  col + hwp1 >= self.shape[1]:
+            raise StdArrayErr(INVALID_COL, "Column out of range", col)
+        return  StdArray(values=self.values[row-halfwidth:row+hwp1,col-halfwidth:col+hwp1],
+                         stdsq=self.stdsq[row-halfwidth:row+hwp1,col-halfwidth:col+hwp1])
+
+    def get_sum(self, row, col, halfwidth, flatmask):
+        """Get sum of values and error around row and column under the control of flatmask"""
+        subarray = self.get_rectangle(row, col, halfwidth)
+        vals = subarray.values.flatten()[flatmask]
+        sq = subarray.stdsq.flatten()[flatmask]
+        return  (np.sum(vals), math.sqrt(np.sum(sq)))
 
     def __add__(self, other):
         try:
@@ -452,3 +474,20 @@ class StdArray:
         f = io.BytesIO()
         np.save(f, parts)
         return  gzip.compress(f.getvalue())
+
+def load_array(filename):
+    """Load an array from a staarry file"""
+    try:
+        with open(filename, 'rb') as inf:
+            result = StdArray(rows=0,cols=0)
+            return  result.load(inf.read())
+    except  OSError  as  e:
+        raise  StdArrayErr(IOERROR, "Could not open {:s} error was {:s}".format(filename, e.args[1]))
+
+def save_array(filename, arr):
+    """Save array to stdarray file"""
+    try:
+        with open(filename, 'wb') as outf:
+            outf.write(arr.save())
+    except  OSError  as  e:
+        raise  StdArrayErr(IOERROR, "Could not save {:s} error was {:s}".format(filename, e.args[1]))

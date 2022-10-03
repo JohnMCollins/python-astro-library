@@ -107,11 +107,14 @@ class ObjLocs:
         # by maximum of that.
         self.resultlist = [self.resultlist[r] for r in np.argsort(-dtab.min(axis=1))]
 
-    def get_offsets_in_image(self):
+    def get_offsets_in_image(self, forget_offsets=False):
         """Get row and column offsets in image for find results,
         return list of (col, row) corresponding to findresults list.
-        col and row are -1 if not in the image"""
+        col and row are -1 if not in the image
+        Forget any existing offsets if forget_offsets is set"""
 
+        if forget_offsets:
+            self.remfitsobj.wcs.set_offsets(0, 0)
         coordlist = [(s.ra, s.dec) for s in self.results()]
         pixlist = self.remfitsobj.wcs.coords_to_pix(np.array(coordlist))
         pixrows, pixcols = self.remfitsobj.data.shape

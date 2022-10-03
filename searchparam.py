@@ -12,10 +12,11 @@ DEFAULT_MAXSHIFT = 10
 DEFAULT_SHIFT2 = 5
 DEFAULT_LOOKAROUND = 3
 DEFAULT_DEFAPSIZE = 6
+DEFAULT_NSIGMAAP = 2.5
 DEFAULT_MINAP = 3
 DEFAULT_MAXAP = 20
 DEFAULT_APSTEP = 1
-
+DEFAULT_SINGLEPIX = 7.5
 
 class SearchParamErr(Exception):
     """Throw in case of errors"""
@@ -41,19 +42,27 @@ Field_names = dict(signif=(xmlutil.getfloat,
                                 int,
                                 DEFAULT_LOOKAROUND,
                                 "Displacement to look around after finding approximate peak"),
-                   defapsize=(xmlutil.getfloat,
+                    singlepixn=(xmlutil.getfloat,
+                                float,
+                                DEFAULT_SINGLEPIX,
+                                "Multiple of signle pixels to treat single pixel as important"),
+                    defapsize=(xmlutil.getfloat,
                                 float,
                                 DEFAULT_DEFAPSIZE,
                                 "Default aperture size if none given"),
-                   minap=(xmlutil.getfloat,
+                    nsigmaap=(xmlutil.getfloat,
+                              float,
+                              DEFAULT_NSIGMAAP,
+                              "Number of sigmas of fit to take as aperture"),
+                    minap=(xmlutil.getfloat,
                             float,
                             DEFAULT_MINAP,
                             "Minimum aperture size when optimising aperture"),
-                   maxap=(xmlutil.getfloat,
+                    maxap=(xmlutil.getfloat,
                             float,
                             DEFAULT_MAXAP,
                             "Maximum aperture size when optimising aperture"),
-                   apstep=(xmlutil.getfloat,
+                    apstep=(xmlutil.getfloat,
                             float,
                             DEFAULT_APSTEP,
                             "Step in aperture size when optimising aperture"))
@@ -68,6 +77,8 @@ class SearchParam:
         self.maxshift = DEFAULT_MAXSHIFT
         self.lookaround = DEFAULT_LOOKAROUND
         self.defapsize = DEFAULT_DEFAPSIZE
+        self.singlepixn = DEFAULT_SINGLEPIX
+        self.nsigmaap = DEFAULT_NSIGMAAP
         self.minap = DEFAULT_MINAP
         self.maxap = DEFAULT_MAXAP
         self.apstep = DEFAULT_APSTEP

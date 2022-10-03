@@ -233,6 +233,11 @@ class ObjEdit_Calcap(ObjEdit_Exist_Base):
         if self.adus is not None:
             xmlutil.savedata(doc, node, "adus", self.adus)
 
+class ObjEdit_Displab(ObjEdit_Exist_Base):
+    """When we are adjusting aperture to given"""
+
+    def __init__(self, oid=0, row=0, col=0, label=""):
+        super().__init__("displab", oid, row, col, label)
 
 class ObjEdit_List:
     """Class for editing list of object edits"""
@@ -305,6 +310,8 @@ class ObjEdit_List:
                         ed = ObjEdit_Adjap()
                     elif op == "calcap":
                         ed = ObjEdit_Calcap()
+                    elif op == "displab":
+                        ed = ObjEdit_Displab()
                     else:
                         continue
                     ed.load(gc)

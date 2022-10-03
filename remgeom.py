@@ -8,6 +8,7 @@ import xmlutil
 import configfile
 import matplotlib.pyplot as plt
 import numpy as np
+import miscutils
 
 
 class RemGeomError(Exception):
@@ -509,8 +510,13 @@ class RemGeom:
 
     def disp_argparse(self, argp, fmt=None):
         """Initialise arg parser with display options"""
+        if fmt is None:
+            try:
+                fmt = os.environ['REMGEOMFMT']
+            except KeyError:
+                pass
         which = self.defwinfmt
-        if fmt is not None and fmt in self.altfmts:
+        if fmt in self.altfmts:     # Covers None case
             which = self.altfmts[fmt]
         argp.add_argument('--width', type=float, default=which.width, help="Width of figure")
         argp.add_argument('--height', type=float, default=which.height, help="Height of figure")
@@ -749,3 +755,23 @@ def save(rg, fname=None):
         configfile.complete_save(doc, fname)
     except configfile.ConfigError as e:
         raise RemGeomError(e.args[0])
+
+def end_figure(fig, filename, filenum=1, multi=False):
+    """End a single figure, save to file if savng files.
+    If multi is True, put _nnn filename after name and before .png"""
+    if filename is None:
+        return
+    if multi:
+        filename = miscutils.removesuffix(filename) + "_{:03d}.png".format(filenum)
+    else:
+        filename = miscutils.replacesuffix(filename, "png")
+    fig.savefig(filename)
+    plt.close(fig)
+
+def end_plot(filename):
+    """End whole plot, protect against interrupts"""
+    if filename is None:
+        try:
+            plt.show()
+        except KeyboardInterrupt:
+            pass

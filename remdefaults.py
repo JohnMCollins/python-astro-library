@@ -148,50 +148,58 @@ def libfile(name, insist=False):
         my_libdir = get_libdir()
     return os.path.join(my_libdir, name)
 
+def rem_replacesuffix(name, newsuffix):
+    """Replace suffix used by remfits with appropriate suffix"""
+    return  miscutils.replacesuffix(name, newsuffix, ("fits.gz",
+                                                      "findres",
+                                                      "objloc",
+                                                      "edits",
+                                                      "tally",
+                                                      "fitsids",
+                                                      "meanstd",
+                                                      "badpix",
+                                                      "counts",
+                                                      "stdarray"))
 
 def tally_file(name):
     """Get the location of a tally file of given name"""
-    return libfile(miscutils.replacesuffix(name, ".tally"))
-
+    return libfile(rem_replacesuffix(name, "tally"))
 
 def fitsid_file(name):
     """Get the location of a fitsids file of given name"""
-    return libfile(miscutils.replacesuffix(name, ".fitsids"))
-
+    return libfile(rem_replacesuffix(name, "fitsids"))
 
 def meanstd_file(name):
     """Get the location of a mean/std file of given name"""
-    return libfile(miscutils.replacesuffix(name, ".meanstd"))
-
+    return libfile(rem_replacesuffix(name, "meanstd"))
 
 def bad_pixmask(name):
     """Get the location of a bad pixel mask of given name"""
-    return libfile(miscutils.replacesuffix(name, ".badpix"))
-
+    return libfile(rem_replacesuffix(name, "badpix"))
 
 def count_file(name):
     """Get the location of a count-type file (used for counting neg pixels)"""
-    return libfile(miscutils.replacesuffix(name, ".counts"))
-
+    return libfile(rem_replacesuffix(name, "counts"))
 
 def objloc_file(name):
     """Get the location of an object location file"""
-    return miscutils.replacesuffix(name, ".objloc", old='fits.gz')
-
+    return rem_replacesuffix(name, "objloc")
 
 def findres_file(name):
     """Get the location of a find results file"""
-    return miscutils.replacesuffix(name, ".findres", old='fits.gz')
-
+    return rem_replacesuffix(name, "findres")
 
 def edits_file(name):
     """Get the location of an edits file"""
-    return miscutils.replacesuffix(name, ".edits", allsuff=True)
-
+    return rem_replacesuffix(name, "edits")
 
 def apopt_file(name):
     """Get the location of an aperture opt file"""
-    return miscutils.replacesuffix(name, ".apopt")
+    return rem_replacesuffix(name, "apopt")
+
+def stdarray_file(name):
+    """Get the location of an aperture opt file"""
+    return libfile(rem_replacesuffix(name, "stdarray"))
 
 # def skymap_file(starname, dat):
 #     """Generate sky map file using base name and date"""

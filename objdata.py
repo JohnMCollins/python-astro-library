@@ -182,7 +182,7 @@ class ObjData(objparam.ObjParam):
             selector = "objname=" + dbcurs.connection.escape(get_objname(dbcurs, self.objname, allobj=True))
             name = self.objname
 
-        dbcurs.execute("SELECT ind,objname,objtype,dispname,vicinity," \
+        dbcurs.execute("SELECT ind,objname,objtype,dispname,vicinity,label," \
                        "dist,rv,radeg,decdeg,rapm,decpm," \
                        "apsize,irapsize,apstd,irapstd,basedon,irbasedon,invented,usable," \
                        "suppress FROM objdata WHERE " + selector)
@@ -191,7 +191,7 @@ class ObjData(objparam.ObjParam):
             if len(f) == 0:
                 raise ObjDataError("(warning) Object not found", name)
             raise ObjDataError("Internal problem too many objects with name", name)
-        self.objind, self.objname, self.objtype, self.dispname, self.vicinity, \
+        self.objind, self.objname, self.objtype, self.dispname, self.vicinity, self.label, \
             self.dist, self.rv, self.ra, self.dec, self.rapm, self.decpm, \
             self.apsize, self.irapsize, self.apstd, self.irapstd, self.basedon, self.irbasedon, self.invented, self.usable, self.suppress = f[0]
         self.save_pos()

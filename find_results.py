@@ -9,6 +9,7 @@ import xmlutil
 import remdefaults
 import objident
 import objdata
+import gauss2d
 
 # import sys
 
@@ -18,10 +19,23 @@ DEFAULT_SIGN = 1.5
 DEFAULT_TOTSIGN = .75
 
 
-def twod_gaussian(pts, amp, sigma):
-    """Compute 2D gaussian (would be generaliable for nD) with given amplitude and sigma"""
-    xpts, ypts = pts
-    return  amp * np.exp((xpts ** 2 + ypts ** 2) / (-2.0 * sigma ** 2))
+class FitResult:
+    """Class for remembering closeness of fit for finding algorithms"""
+
+    def __init__(self, row, col, rowdiff=0, coldiff=0, apsize = 0.0, adus=0.0, peak=0.0, fitpeak=1.0, fitsigma=1.0, peakstd=0.0, sigmastd=0.0):
+        self.row = row
+        self.col = col
+        self.rowdiff = rowdiff
+        self.coldiff = coldiff
+        self.apsize = apsize
+        self.adus = adus
+        self.peak = peak
+        self.fitpeak = fitpeak
+        self.fitsigma = fitsigma
+        self.peakstd = peakstd
+        self.sigmastd = sigmastd
+        self.combined_sig = (peakstd * sigmastd) / (fitpeak * fitsigma)
+        self.meanadus = 1.0             # Used in opt_aperture
 
 
 class FindResultErr(Exception):
@@ -64,7 +78,7 @@ class FindResult:
     def not_identified(self):
         """Return if no identification"""
         try:
-            self.obj.check_valid()
+            self.obj.check_valid_id()
         except AttributeError:
             return  True
         except objident.ObjIdentErr:
@@ -74,6 +88,31 @@ class FindResult:
     def is_usable(self):
         """Report if object is usable as far as we know"""
         return  self.obj is None or self.obj.usable
+
+    def assign_label(self, dbcurs, existing_labs):
+        """Assign a permanent label to the result, avoiding the existing labels"""
+        if  not self.is_usable() or self.not_identified():
+            raise  FindResultErr("Object not usable")
+        n = 0
+        base = ord('A')
+        while 1:
+            nlab = chr(base + n % 26)
+            if n >= 26:
+                nlab += str(n // 26)
+            if nlab not in existing_labs:
+                break
+            n += 1
+        self.obj.label = self.label = nlab
+        existing_labs.add(nlab)
+        return  dbcurs.execute("UPDATE objdata SET label=%s WHERE ind={:d}".format(self.obj.objind), nlab)
+
+    def unassign_label(self, dbcurs):
+        """Unassing permanent label from the result"""
+        if  not self.is_usable() or self.not_identified():
+            raise  FindResultErr("Object not usable")
+        self.obj.label = None
+        self.label = 'zzz'
+        return  dbcurs.execute("UPDATE objdata SET label=NULL WHERE ind={:d}".format(self.obj.objind))
 
     def resetapsize(self, apsize=0, row=0, col=0, adus=0.0, rdiff=None, cdiff=None):
         """Reset result after recalculating aperture"""
@@ -163,12 +202,18 @@ class FindResults:
         except AttributeError:
             pass
 
+        # For excluding single pixels
+
+        ar = range(-1,2)
+        spx, spy = np.meshgrid(ar, ar)
+        self.spmask = ((spx!=0)|(spy!=0)).astype(np.float64)
+
         # Working variables only for benefit of searches
 
-        self.imagedata = self.mask = None
+        self.imagedata = self.maskbool = self.mask = self.xypoints = None
         self.pixrows = self.pixcols = self.minrow = self.mincol = self.maxrow = self.maxcol = 0
         self.maskpoints = self.skylevpoints = self.min_singlepix = self.min_apertureadus = 0.0
-        self.exprow = self.expcol = self.currentap = self.apsq = 0
+        self.exprow = self.expcol = self.currentap = self.currentiap = self.apsq = 0
 
     def num_results(self, idonly=False, nohidden=False):
         """Return number of find results, if idonly is True, limit to ones identified"""
@@ -214,13 +259,16 @@ class FindResults:
     def relabel(self):
         """Assign labels to reordered list"""
         n = 0
-        base = ord('A')
+        base = ord('a')
         for r in self.resultlist:
-            l = chr(base + n % 26)
-            if n >= 26:
-                l += str(n // 26)
-            r.label = l
-            n += 1
+            if not r.obj.valid_label() or r.not_identified():
+                l = chr(base + n % 26)
+                if n >= 26:
+                    l += str(n // 26)
+                r.label = l
+                n += 1
+            else:
+                r.label = r.obj.label
 
     def rekey(self):
         """Recreate the lookup table"""
@@ -236,6 +284,15 @@ class FindResults:
         self.resultlist = [r for r in self.resultlist if r.col is not None and r.row is not None]
         self.resultlist.sort(key=lambda x: x.adus + int(x.istarget) * 1e50, reverse=True)
 
+    def get_label_set(self, dbcurs):
+        """Return set of existing permanent labels"""
+        targobj = self.get_targobj()
+        if  targobj is None:
+            raise FindResultErr("No target in results")
+        dbcurs.execute("SELECT label FROM objdata WHERE label IS NOT NULL AND vicinity=%s", targobj.obj.objname)
+        elabrows = dbcurs.fetchall()
+        return  {r[0] for r in elabrows}
+
     def get_image_dims(self, apsize):
         """Internal routine to get dimensions and other data of image"""
 
@@ -244,11 +301,12 @@ class FindResults:
         self.imagedata = self.remfitsobj.data
         self.pixrows, self.pixcols = self.imagedata.shape
 
-        self.currentap = int(math.floor(apsize))
+        self.currentap = apsize
+        self.currentiap = int(math.floor(apsize))
         self.apsq = apsize ** 2
-        self.minrow = self.mincol = self.currentap + 1
-        self.maxrow = self.pixrows - self.currentap  # This is actually 1 more
-        self.maxcol = self.pixcols - self.currentap  # This is actually 1 more
+        self.minrow = self.mincol = self.currentiap + 1
+        self.maxrow = self.pixrows - self.currentiap  # This is actually 1 more
+        self.maxcol = self.pixcols - self.currentiap  # This is actually 1 more
 
     def make_ap_mask(self, apsize=None):
         """Make a mask of right size only for aperature of given radius"""
@@ -256,35 +314,63 @@ class FindResults:
         if apsize is None:
             apsize = self.currentap
         iapsize = int(math.floor(apsize))
-        side = iapsize * 2 + 1
+        xpoints, ypoints = np.meshgrid(range(-iapsize, iapsize + 1), range(-iapsize, iapsize + 1))
         radsq = apsize * apsize
-        self.mask = np.zeros((side, side), dtype=np.float32)
-        for r in range(side):
-            for c in range(side):
-                if (r - iapsize) ** 2 + (c - iapsize) ** 2 <= radsq:
-                    self.mask.itemset((r, c), 1.0)
-
-        self.maskpoints = np.sum(self.mask)
+        xsq = xpoints ** 2
+        ysq = ypoints ** 2
+        maskbool = xsq + ysq <= radsq
+        self.mask = maskbool.astype(np.float64)
+        self.maskbool = maskbool.flatten()
+        # self.xpoints = xpoints.flatten()[maskbool]
+        # self.ypoints = ypoints.flatten()[maskbool]
+        self.xypoints = (xpoints.flatten()[self.maskbool], ypoints.flatten()[self.maskbool])
+        self.maskpoints = np.count_nonzero(maskbool)
         self.skylevpoints = self.maskpoints * self.remfitsobj.meanval
         self.min_singlepix = self.remfitsobj.meanval + self.signif * self.remfitsobj.stdval
         self.min_apertureadus = self.maskpoints * self.remfitsobj.stdval * self.totsignif
 
+    def get_aperture_data(self, row, column):
+        """Get data in aperture according to mask"""
+        halfside = self.currentiap + 1
+        return  self.imagedata[row - self.currentiap:row + halfside, column - self.currentiap:column + halfside].flatten()[self.maskbool]
+
     def calculate_adus(self, row, column):
         """Calculate the total ADUs based arount the given row and column"""
-        halfside = self.currentap + 1  # as we have width + 1 + width
-        return  np.sum(self.mask * self.imagedata[row - self.currentap:row + halfside, column - self.currentap:column + halfside]) - self.skylevpoints
+        return  np.sum(self.get_aperture_data(row, column)) - self.skylevpoints
 
     def get_exp_rowcol(self, ra, dec):
         """Get expected row and column from given ra and dec"""
-        expcol, exprow = self.remfitsobj.wcs.coords_to_pix(((ra, dec),))[0]
+        expcol, exprow = self.remfitsobj.wcs.coords_to_colrow(ra, dec)
         self.exprow = int(round(exprow))
         self.expcol = int(round(expcol))
 
-    def get_object_offsets(self, maxshift=10, eoffrow=0, eoffcol=0):
+    def get_gauss_fit(self, row, column, rowdiff, coldiff):
+        """Get Gasssian fit and fill in results structure"""
+        dat = self.get_aperture_data(row, column) - self.remfitsobj.meanval
+        peak = dat.max()
+        adus = np.sum(dat)
+        if adus < self.min_apertureadus:
+            return  None
+
+        try:
+            (fitpeak, fitsigma), fit_errs = opt.curve_fit(gauss2d.gauss_circle, self.xypoints, dat, p0=(peak, self.remfitsobj.stdval))
+        except RuntimeError:
+            return  None
+
+        if fitpeak <= 0  or fitsigma <= 0:
+            return  None
+
+        peakstd, sigmastd = np.sqrt(np.diag(fit_errs))
+        return  FitResult(row, column, rowdiff=rowdiff, coldiff=coldiff,
+                           apsize=self.currentap, adus=np.sum(dat), peak=peak,
+                           fitpeak=fitpeak, fitsigma=fitsigma,
+                           peakstd=peakstd, sigmastd=sigmastd)
+
+    def get_object_offsets(self, searchp, maxshift=10, eoffrow=0, eoffcol=0):
         """Search the square given by the expected reow column at the centre with maxshift eiether side"""
 
-        exprow = self.exprow + eoffrow
-        expcol = self.expcol + eoffcol
+        exprow = self.exprow - eoffrow
+        expcol = self.expcol - eoffcol
 
         # First pass is to list points in region at least as much as to make a single pixel
         # more than the minimum for one pixel
@@ -308,16 +394,21 @@ class FindResults:
         results = []
 
         for trow, tcol in zip(trows, tcols):
-            dat = self.calculate_adus(trow, tcol)
-            if dat >= self.min_apertureadus:
-                results.append((trow - exprow, tcol - expcol, trow, tcol, dat))
+            # If this is single pixel or close to it, don't bother
+            if np.sum(self.imagedata[trow-1:trow+2,tcol-1:tcol+2] * self.spmask) <= searchp.singlepixn * self.min_singlepix:
+                # print("Skipping single pixel at", tcol, trow)
+                continue
+            dat = self.get_gauss_fit(trow, tcol, exprow - trow, expcol - tcol)
+            if dat is not None:
+                results.append(dat)
 
         if len(results) == 0:
             return  None
 
-        # Sort results by increasing distance from "origin", then by decreasing ADUs
+        # Sort results by increasing distance from "origin", then by increasing fit (to make that most significant)
 
-        return  sorted(sorted(results, key=lambda x: x[0] ** 2 + x[1] ** 2), reverse=True, key=lambda x: x[-1])
+        results = sorted(results, key=lambda x: x.rowdiff**2 + x.coldiff**2)
+        return  sorted(results, key=lambda x: x.combined_sig)
 
     def find_object(self, objloc, searchp, eoffrow=0, eoffcol=0, apsize=None, finding_target=False):
         """Fins specific object from expected"""
@@ -334,7 +425,7 @@ class FindResults:
         maxs = searchp.maxshift2
         if finding_target:
             maxs = searchp.maxshift
-        return  self.get_object_offsets(maxshift=maxs, eoffrow=eoffrow, eoffcol=eoffcol)
+        return  self.get_object_offsets(searchp, maxshift=maxs, eoffrow=eoffrow, eoffcol=eoffcol)
 
     def find_peak(self, row, col, searchp, apsize=None):
         """Find peak for when we are giving a label to an object"""
@@ -346,7 +437,7 @@ class FindResults:
         self.make_ap_mask(apsize)
         self.exprow = row
         self.expcol = col
-        return  self.get_object_offsets(maxshift=searchp.maxshift)
+        return  self.get_object_offsets(searchp, maxshift=searchp.maxshift)
 
     def opt_aperture(self, row, col, searchp, minap=None, maxap=None, step=None):
         """Optimise aparture looking around either way from row and col,
@@ -365,12 +456,31 @@ class FindResults:
             # Store row offset, col offset, row, column, aperture, adus, adus per point
             for rtry in range(max(self.minrow, row - searchp.lookaround), min(self.maxrow, row + searchp.lookaround)):
                 for ctry in range(max(self.mincol, col - searchp.lookaround), min(self.maxcol, col + searchp.lookaround)):
-                    adus = self.calculate_adus(rtry, ctry)
-                    results.append((rtry - row, ctry - col, rtry, ctry, possap, adus, adus / self.maskpoints))
+                    gfit = self.get_gauss_fit(rtry, ctry, rtry - row, ctry - col)
+                    if gfit is not None:
+                        gfit.meanadus = gfit.adus / self.maskpoints
+                        results.append(gfit)
 
-        results = sorted(sorted(results, key=lambda x: x[0] ** 2 + x[1] ** 2), reverse=True, key=lambda x: x[-1])
-        dummy, dummy, rres, cres, aperture, adus, dummy = results[0]
-        return  (aperture, rres, cres, adus)
+        # Choose firstly by best mean adus, then fit, then distance
+
+        if len(results) == 0:
+            return  None
+
+        # This gets results by fit of signma with multilier
+
+        results = sorted(results, key=lambda x: abs(x.fitsigma*searchp.totsig-x.apsize))
+
+        topap = results[0].apsize
+        results = [r for r in results if r.apsize == topap]
+
+        results = sorted(results, key=lambda x: x.combined_sig)
+        #results = sorted(results, key=lambda x:x.sigmastd)
+        #
+        # for r in results:
+        #     print(r.apsize, r.adus, r.meanadus, r.combined_sig, r.fitpeak, r.fitsigma, r.peakstd, r.sigmastd)
+        # r = results[0]
+        # print("Final", r.apsize, r.adus, r.meanadus, r.combined_sig, r.fitpeak, r.fitsigma, r.peakstd, r.sigmastd)
+        return  results[0]
 
     def calccoords(self):
         """Converts rows and columns in result list to ra and dec"""
@@ -407,27 +517,27 @@ class FindResults:
             res.row = r
         return  result
 
-    def findbest_colrow(self, scol, srow, apsize, maxshift):
-        """Find the best column and row based on given starting column and row for given
-        aperture size, returning as (scol, srow, aducount, maxpoints)"""
-
-        self.get_image_dims(apsize)
-        self.makemask(apsize)
-
-        maxaduc = -1e6  # Hopefully anything will beat this
-        colmaxadu = scol
-        rowmaxadu = srow
-
-        for rs in range(max(self.minrow, srow - maxshift), min(self.maxrow, srow + maxshift)):
-            for cs in range(max(self.mincol, scol - maxshift), min(self.maxcol, scol + maxshift)):
-                adu = np.sum(np.roll(np.roll(self.mask, shift=cs - self.mincol, axis=1), shift=rs - self.minrow, axis=0) * self.imagedata)
-                if adu > maxaduc:
-                    maxaduc = adu
-                    rowmaxadu = rs
-                    colmaxadu = cs
-        if maxaduc < 0.0:
-            maxaduc = np.sum(np.roll(np.roll(self.mask, shift=scol - self.minrow, axis=1), shift=srow - self.minrow, axis=0) * self.imagedata)
-        return  (colmaxadu, rowmaxadu, maxaduc, self.maskpoints)
+#     def findbest_colrow(self, scol, srow, apsize, maxshift):
+#         """Find the best column and row based on given starting column and row for given
+#         aperture size, returning as (scol, srow, aducount, maxpoints)"""
+#
+#         self.get_image_dims(apsize)
+#         self.makemask(apsize)
+#
+#         maxaduc = -1e6  # Hopefully anything will beat this
+#         colmaxadu = scol
+#         rowmaxadu = srow
+#
+#         for rs in range(max(self.minrow, srow - maxshift), min(self.maxrow, srow + maxshift)):
+#             for cs in range(max(self.mincol, scol - maxshift), min(self.maxcol, scol + maxshift)):
+#                 adu = np.sum(np.roll(np.roll(self.mask, shift=cs - self.mincol, axis=1), shift=rs - self.minrow, axis=0) * self.imagedata)
+#                 if adu > maxaduc:
+#                     maxaduc = adu
+#                     rowmaxadu = rs
+#                     colmaxadu = cs
+#         if maxaduc < 0.0:
+#             maxaduc = np.sum(np.roll(np.roll(self.mask, shift=scol - self.minrow, axis=1), shift=srow - self.minrow, axis=0) * self.imagedata)
+#         return  (colmaxadu, rowmaxadu, maxaduc, self.maskpoints)
 
     def load(self, node):
         """Load up from XML dom"""
