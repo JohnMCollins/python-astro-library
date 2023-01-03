@@ -1,41 +1,36 @@
 """Classes for reesult finding as XML"""
 
-import os.path
 import math
-import xml.etree.ElementTree as ET
+# import sys
 import numpy as np
+# import matplotlib.pyplot as plt
+# from matplotlib import colors
 import scipy.optimize as opt
-import xmlutil
-import remdefaults
 import objident
 import objdata
 import gauss2d
-
-# import sys
 
 FINDRES_DOC_ROOT = "Findres2"
 
 DEFAULT_SIGN = 1.5
 DEFAULT_TOTSIGN = .75
 
-
 class FitResult:
     """Class for remembering closeness of fit for finding algorithms"""
 
-    def __init__(self, row, col, rowdiff=0, coldiff=0, apsize = 0.0, adus=0.0, peak=0.0, fitpeak=1.0, fitsigma=1.0, peakstd=0.0, sigmastd=0.0):
+    def __init__(self, row, col, rowdiff=0.0, coldiff=0.0, apsize = 0.0, adus=0.0, modadus = 0.0, peak=0.0, fitpeak=1.0, fitsigma=1.0, peakstd=0.0, sigmastd=0.0):
         self.row = row
         self.col = col
         self.rowdiff = rowdiff
         self.coldiff = coldiff
         self.apsize = apsize
         self.adus = adus
+        self.modadus = modadus
         self.peak = peak
         self.fitpeak = fitpeak
         self.fitsigma = fitsigma
         self.peakstd = peakstd
         self.sigmastd = sigmastd
-        self.combined_sig = (peakstd * sigmastd) / (fitpeak * fitsigma)
-        self.meanadus = 1.0             # Used in opt_aperture
 
 
 class FindResultErr(Exception):
@@ -45,35 +40,28 @@ class FindResultErr(Exception):
 class FindResult:
     """Class for remembering a single result"""
 
-    Field_names = dict(radeg=xmlutil.getfloat,
-                       decdeg=xmlutil.getfloat,
-                       col=xmlutil.getint,
-                       row=xmlutil.getint,
-                       apsize=xmlutil.getfloat,
-                       label=xmlutil.gettext,
-                       adus=xmlutil.getfloat,
-                       rdiff=xmlutil.getint,
-                       cdiff=xmlutil.getint,
-                       ident=None,
-                       info=None,
-                       mags=None,
-                       position=None)
+    frfields = dict(obsind='d', objind='d', ind='Z', nrow='f', ncol='f', rdiff='f', cdiff='f',
+                    radeg='f', decdeg='f', amp='f', sigma='f', ampstd='f', sigmastd='f', apsize='f',
+                    adus='f', modadus='f', hide='b')
+    frformats = dict(d='{:d}', f="{:.16e}", b="{:d}")
 
-    def __init__(self, **kwargs):
-        self.col = self.row = None
-        self.adus = self.radeg = self.decdeg = 0.0
-        self.rdiff = self.cdiff = 0
-        self.apsize = 0.0
+    def __init__(self, obj = None, objind = None, apsize = 0.0, ind = None):
+        self.obsind = self.col = self.row = None
+        self.radeg = self.decdeg = self.rdiff = self.cdiff = 0.0
+        self.amp = self.sigma = self.ampstd = self.sigmastd = self.adus = self.modadus = 0.0
         self.obj = None
         self.label = ""
-        self.istarget = False
-        self.needs_correction = False
-        self.hide = False
-        for kw in tuple(FindResult.Field_names.keys()) + ('obj', 'hide'):
-            try:
-                setattr(self, kw, kwargs[kw])
-            except KeyError:
-                pass
+        self.istarget = self.hide = False
+        self.ind = ind
+        self.obj = obj
+        self.objind = objind
+        self.apsize = apsize
+        if obj is not None:
+            self.objind = obj.objind
+            if obj.valid_label():
+                self.label = obj.label
+            if apsize == 0.0:
+                self.apsize = obj.apsize
 
     def not_identified(self):
         """Return if no identification"""
@@ -84,6 +72,14 @@ class FindResult:
         except objident.ObjIdentErr:
             return  True
         return  False
+
+    def calculate_mod_integral(self, apsize = None):
+        """Calculate model-based adus"""
+        if apsize is None:
+            apsize = self.apsize
+        if  self.sigma == 0.0 or apsize == 0.0:
+            return  0.0
+        return  self.amp * 2.0 * np.pi * (1.0 - self.sigma**2 * math.exp((apsize/self.sigma)**2 / -2.0))
 
     def is_usable(self):
         """Report if object is usable as far as we know"""
@@ -114,74 +110,78 @@ class FindResult:
         self.label = 'zzz'
         return  dbcurs.execute("UPDATE objdata SET label=NULL WHERE ind={:d}".format(self.obj.objind))
 
-    def resetapsize(self, apsize=0, row=0, col=0, adus=0.0, rdiff=None, cdiff=None):
-        """Reset result after recalculating aperture"""
-        if row < 0 or col < 0:
-            self.col = self.row = None
+    def loaddb(self, dbcurs, obj = None, ind = None, objind = None, obsind = None):
+        """Load record from database by ind or objind and obsind"""
+        self.obj = obj
+        if obj is not None:
+            ind = obj.objind
+        if ind is not None:
+            Wh = "ind={:d}".format(ind)
         else:
-            self.col = col
-            self.row = row
-        if rdiff is not None:
-            self.rdiff = rdiff
-        if cdiff is not None:
-            self.cdiff = cdiff
-        self.apsize = apsize
-        self.adus = adus
-        self.radeg = self.decdeg = 0.0
-
-    def load(self, node):
-        """Load from XNK dom"""
-        self.col = self.row = None
-        self.rdiff = self.cdiff = 0
-        self.apsize = 0.0
-        self.radeg = self.decdeg = 0.0
-        self.adus = 0.0
-        self.label = ""
-        self.obj = None
-        self.hide = xmlutil.getboolattr(node, "hide")
-        self.istarget = xmlutil.getboolattr(node, "target")
-        self.needs_correction = xmlutil.getboolattr(node, "needsc")
-
-        for child in node:
-            tagn = child.tag
             try:
-                lrout = FindResult.Field_names[tagn]
-                if lrout is None:
-                    if self.obj is None:
-                        self.obj = objdata.ObjData()
-                        self.obj.load(node)
-                else:
-                    setattr(self, tagn, lrout(child))
-            except KeyError:
-                pass
+                Wh = "objind={:d} AND obsind={:d}".format(objind, obsind)
+            except TypeError:
+                raise FindResultErr("Attempting to load findresult with no objind and obsind")
+        fields = FindResult.frfields.keys()
+        dbcurs.execute("SELECT " + ",".join(fields) + " FROM findresult WHERE " + Wh)
+        r = dbcurs.fetchone()
+        if r is None:
+            raise FindResultErr("Expecting findresult record")
+        for f,val in zip(fields,r):
+            # Have to change "nrow" and "ncol" to "row" and "col"
+            non = f
+            if non[0] == 'n':
+                non = non[1:]
+            setattr(self, non, val)
+        if obj is None and self.ind is not None:
+            self.obj = objdata.ObjData()
+            self.obj.get(dbcurs, ind=self.objind)
+            self.istarget = self.obj.is_target()
+            # Maybe adjust for PM? But we have RA/DEC as adjusted in structure
 
-    def save(self, doc, pnode, name="result"):
-        """Save to XML DOM node"""
-        if self.obj is None:
-            node = ET.SubElement(pnode, name)
-        else:
-            node = self.obj.save(doc, pnode, name)
-        xmlutil.setboolattr(node, "target", self.istarget)
-        xmlutil.setboolattr(node, "needsc", self.needs_correction)
-        xmlutil.setboolattr(node, "hide", self.hide)
-        for k, r in FindResult.Field_names.items():
-            if r is None:
+    def savedb(self, dbcurs):
+        """Save record to database (provides for non-identified things)"""
+
+        dbchanges = 0
+        if self.ind is not None:
+            dbchanges += dbcurs.execute("DELETE FROM aducalc WHERE frind={:d}".format(self.ind))
+            dbchanges += dbcurs.execute("DELETE FROM findresult WHERE ind={:d}".format(self.ind))
+        elif self.objind is not None and self.obsind is not None:
+            dbchanges += dbcurs.execute("DELETE FROM aducalc WHERE objind={:d} AND obsind={:d}".format(self.objind, self.obsind))
+            dbchanges += dbcurs.execute("DELETE FROM findresult WHERE objind={:d} AND obsind={:d}".format(self.objind, self.obsind))
+
+        cols = []
+        vals = []
+        for field, typ in FindResult.frfields.items():
+            if field[0] == 'n':
+                val = getattr(self, field[:1], None)
+            else:
+                val = getattr(self, field, None)
+            if val is None:
                 continue
-            v = getattr(self, k, None)
-            if v is not None and (not isinstance(v, str) or len(v) != 0):
-                xmlutil.savedata(doc, node, k, v)
+            # Give invalid code for things we don't want to save like ind
+            try:
+                vals.append(FindResult.frformats[typ].format(val))
+            except KeyError:
+                continue
+            cols.append(field)
+
+        dbchanges += dbcurs.execute("INSERT INTO findresult (" + ",".join(cols) + ") VALUES (" + ",".join(vals) + ")")
+        self.ind = dbcurs.lastrowid
+        if dbchanges > 0:
+            dbcurs.connection.commit()
 
 
 class FindResults:
     """A class for remembering things we've found"""
 
-    Fr_fields = dict(obsdate=xmlutil.getdatetime,
-                     obsind=xmlutil.getint,
-                     nrows=xmlutil.getint,
-                     ncols=xmlutil.getint,
-                     filter=xmlutil.gettext,
-                     signif=xmlutil.getfloat,
-                     totsignif=xmlutil.getfloat)
+    # Fr_fields = dict(obsdate=xmlutil.getdatetime,
+    #                  obsind=xmlutil.getint,
+    #                  nrows=xmlutil.getint,
+    #                  ncols=xmlutil.getint,
+    #                  filter=xmlutil.gettext,
+    #                  signif=xmlutil.getfloat,
+    #                  totsignif=xmlutil.getfloat)
 
     def __init__(self, remfitsobj=None):
         self.resultlist = []
@@ -231,6 +231,20 @@ class FindResults:
             if (not idonly or r.obj is not None) and (not nohidden or not r.hide):
                 yield r
 
+    def append_result(self, fr):
+        """Append a result to result list. NB need to sort, relabel etc"""
+        self.resultlist.append(fr)
+
+    def insert_result(self, fr):
+        """Append result if we haven't got it otherwise replace existing"""
+        if fr.obj is not None:
+            if fr.obj.objname in self.objdict:
+                for n, r in enumerate(self.resultlist):
+                    if r.obj is not None and r.obj.objind == fr.obj.objind:
+                        self.resultlist[n] = fr
+                        return
+        self.resultlist.append(fr)
+
     def __getitem__(self, k):
         try:
             if isinstance(k, str):
@@ -238,6 +252,12 @@ class FindResults:
             return self.resultlist[k]
         except (IndexError, KeyError):
             raise FindResultErr("Cannot find item " + str(k) + " in find results")
+
+    def __setitem__(self, k, value):
+        if isinstance(k, str):
+            self.objdict[k] = value
+        else:
+            self.resultlist[k] = value
 
     def tooclose(self, row, col, existing):
         """Reject possible if too close to existing one"""
@@ -410,22 +430,77 @@ class FindResults:
         results = sorted(results, key=lambda x: x.rowdiff**2 + x.coldiff**2)
         return  sorted(results, key=lambda x: x.combined_sig)
 
-    def find_object(self, objloc, searchp, eoffrow=0, eoffcol=0, apsize=None, finding_target=False):
-        """Fins specific object from expected"""
-        if apsize is None:
-            apsize = objloc.apsize
-            if apsize == 0:
-                apsize = searchp.defapsize
-        self.get_image_dims(apsize)
-        self.totsignif = searchp.totsig
-        self.signif = searchp.signif
-        self.make_ap_mask(apsize)
-        self.exprow = objloc.row
-        self.expcol = objloc.col
-        maxs = searchp.maxshift2
-        if finding_target:
-            maxs = searchp.maxshift
-        return  self.get_object_offsets(searchp, maxshift=maxs, eoffrow=eoffrow, eoffcol=eoffcol)
+    def find_object(self, row, col, obj, searchp):
+        """Fins specific object from expected place NB row and col might be fractional"""
+        apsize = obj.apsize
+        if apsize == 0:
+            apsize = searchp.defapsize
+
+        # This is the limit of the grid we look in
+        lim = apsize + searchp.maxshift2
+        ist = False
+        if obj.is_target():
+            ist = True
+            lim = apsize + searchp.maxshift
+
+        self.apsq = apsize**2
+        scanlim = int(math.ceil(lim))
+        scanpix = 2 * scanlim + 1
+        scanrange = range(-scanlim, scanlim + 1)
+        xpixes = np.tile(scanrange, (scanpix, 1))
+        ypixes = xpixes.transpose()
+        xypixes = [(y, x) for x, y in zip(xpixes.flatten(), ypixes.flatten()) if x**2 + y** 2 <= self.apsq]
+
+        srow = int(round(row))
+        scol = int(round(col))
+
+        # Get segment of array, subtracting off sky level which we created previously
+
+        dataseg = self.remfitsobj.data[srow-scanlim:srow+scanlim+1,scol-scanlim:scol+scanlim+1] - self.remfitsobj.skylev
+
+        datavalues = np.array([dataseg[y + scanlim, x + scanlim] for y, x in xypixes])
+        xypixes = np.array(xypixes)
+
+        meanv = datavalues.mean()
+        datavalues /= meanv
+
+        try:
+            lresult, lfiterrs = opt.curve_fit(gauss2d.gauss_circle, xypixes, datavalues, p0=(0.0, 0.0, max(datavalues), np.std(datavalues)))
+        except RuntimeError:
+            raise  FindResultErr("Unable to find {:s}".format(obj.dispname))
+
+        fr = FindResult(obj=obj, apsize=apsize)
+        cdiff, rdiff, fr.amp, fr.sigma = lresult
+        dummy, dummy, fr.ampstd, fr.sigmastd = np.diag(lfiterrs)
+        # cdiff += col - scol
+        # rdiff += row - srow
+        fr.amp *= meanv
+        fr.ampstd *= meanv
+        cdiff = col - scol - cdiff
+        rdiff = row - srow - rdiff
+        fr.col = col - cdiff
+        fr.row = row - rdiff
+        fr.cdiff = cdiff
+        fr.rdiff = rdiff
+        fr.radeg = obj.ra
+        fr.decdeg = obj.dec
+        fr.istarget = ist
+
+        # Now calculate ADUs from data and from fit
+
+        xypixes = [(x, y) for x, y in zip(xpixes.flatten(), ypixes.flatten()) if (x - fr.cdiff)**2 + (y - fr.rdiff) ** 2 <= self.apsq]
+        # print("xypixes", xypixes, sys.stderr)
+        # print("dataseg points", [dataseg[y+scanlim,x+scanlim] for x, y in xypixes], sys.stderr)
+        fr.adus = np.sum([dataseg[y + scanlim, x + scanlim] for x, y in xypixes])
+        fr.modadus = np.sum(gauss2d.gauss_circle(np.array(xypixes), fr.cdiff, fr.rdiff, fr.amp, fr.sigma))
+
+        # plotfigure = plt.figure()
+        # ax = plotfigure.add_subplot(111, projection='3d')
+        # ax.plot_wireframe(xpixes, ypixes, dataseg, color='b', alpha=.5)
+        # fitpoints = gauss2d.gauss2d(xpixes-fr.cdiff, ypixes-fr.rdiff, fr.amp, fr.sigma)
+        # ax.plot_surface(xpixes, ypixes, fitpoints, color='g', alpha=.5)
+        # plt.show()
+        return  fr
 
     def find_peak(self, row, col, searchp, apsize=None):
         """Find peak for when we are giving a label to an object"""
@@ -539,65 +614,83 @@ class FindResults:
 #             maxaduc = np.sum(np.roll(np.roll(self.mask, shift=scol - self.minrow, axis=1), shift=srow - self.minrow, axis=0) * self.imagedata)
 #         return  (colmaxadu, rowmaxadu, maxaduc, self.maskpoints)
 
-    def load(self, node):
-        """Load up from XML dom"""
+    # def load(self, node):
+    #     """Load up from XML dom"""
+    #
+    #     self.obsdate = None
+    #     self.obsind = None
+    #     self.nrows = self.ncols = None
+    #     self.filter = None
+    #     self.resultlist = []
+    #     self.signif = None
+    #     self.totsignif = None
+    #
+    #     for child in node:
+    #         tagn = child.tag
+    #         try:
+    #             setattr(self, tagn, FindResults.Fr_fields[tagn](child))
+    #         except KeyError:
+    #             if tagn == "results":
+    #                 for gc in child:
+    #                     fr = FindResult()
+    #                     fr.load(gc)
+    #                     self.resultlist.append(fr)
+    #     self.rekey()
+    #
+    # def save(self, doc, pnode, name):
+    #     """Save to XML DOM node"""
+    #     node = ET.SubElement(pnode, name)
+    #     for k in FindResults.Fr_fields:
+    #         v = getattr(self, k, None)
+    #         if v is not None:
+    #             xmlutil.savedata(doc, node, k, v)
+    #     if len(self.resultlist) != 0:
+    #         gc = ET.SubElement(node, "results")
+    #         for fr in self.results():
+    #             fr.save(doc, gc, "result")
 
-        self.obsdate = None
-        self.obsind = None
-        self.nrows = self.ncols = None
-        self.filter = None
+    def adjust_offsets(self, dbcurs, rowdiff, coldiff):
+        """Adjust row and column difference fields after we've adjusted that for obs"""
+        donefr = 0
+        for fr in self.resultlist:
+            fr.rdiff += rowdiff
+            fr.cdiff += coldiff
+            if fr.ind is not None:
+                donefr += dbcurs.execute("UPDATE findresult SET rdiff={:.4f},cdiff={:.4f} WHERE ind={:d}".format(fr.rdiff, fr.cdiff, fr.ind))
+        return  donefr
+
+    def loaddb(self, dbcurs):
+        """Load from database note assumes remfitsobj filled in"""
+        try:
+            obsind = self.remfitsobj.from_obsind
+        except  AttributeError:
+            raise FindResultErr("loaddb called with no remfitsobj")
+
         self.resultlist = []
-        self.signif = None
-        self.totsignif = None
 
-        for child in node:
-            tagn = child.tag
-            try:
-                setattr(self, tagn, FindResults.Fr_fields[tagn](child))
-            except KeyError:
-                if tagn == "results":
-                    for gc in child:
-                        fr = FindResult()
-                        fr.load(gc)
-                        self.resultlist.append(fr)
+        dbcurs.execute("SELECT ind FROM findresult WHERE obsind={:d}".format(obsind))
+        frres = dbcurs.fetchall()
+        dbcurs.execute("SELECT filter,date_obs,nrows,ncols FROM obsinf WHERE obsind={:d}".format(obsind))
+        obsinf = dbcurs.fetchone()
+        if obsinf is None:
+            raise FindResultErr("No obsinf for obsind={:d}".format(obsind))
+        self.filter, self.obsdate, self.nrows, self.ncols = obsinf
+        self.obsind = obsind
+
+        for frrind, in frres:
+            fr = FindResult()
+            fr.loaddb(dbcurs, ind=frrind)
+            fr.obj = objdata.ObjData()
+            fr.obj.get(dbcurs, ind=fr.objind)
+            self.resultlist.append(fr)
+
+        self.reorder()
+        self.relabel()
         self.rekey()
 
-    def save(self, doc, pnode, name):
-        """Save to XML DOM node"""
-        node = ET.SubElement(pnode, name)
-        for k in FindResults.Fr_fields:
-            v = getattr(self, k, None)
-            if v is not None:
-                xmlutil.savedata(doc, node, k, v)
-        if len(self.resultlist) != 0:
-            gc = ET.SubElement(node, "results")
-            for fr in self.results():
-                fr.save(doc, gc, "result")
+    def savedb(self, dbcurs, delete_previous = False):
+        """Save records to database leaving along previously unsave records unless delete_previous set"""
 
-
-def load_results_from_file(fname, fitsobj=None, oknotfound=False):
-    """Load results from results text file"""
-    fname = remdefaults.findres_file(fname)
-    try:
-        dummy, root = xmlutil.load_file(fname, FINDRES_DOC_ROOT, oknotfound)
-        fr = FindResults(fitsobj)
-        frnode = root.find("RES")
-        if frnode is None:
-            raise xmlutil.XMLError("No tree")
-        fr.load(frnode)
-    except xmlutil.XMLError as e:
-        raise FindResultErr("Load of " + fname + " gave " + e.args[0])
-    return  fr
-
-
-def save_results_to_file(results, filename, force=False):
-    """Save results to results text file"""
-    filename = remdefaults.findres_file(filename)
-    if not force and os.path.exists(filename):
-        raise FindResultErr("Will not overwrite existing file " + filename)
-    try:
-        doc, root = xmlutil.init_save(FINDRES_DOC_ROOT, FINDRES_DOC_ROOT)
-        results.save(doc, root, "RES")
-        xmlutil.complete_save(filename, doc)
-    except xmlutil.XMLError as e:
-        raise FindResultErr("Save of " + filename + " gave " + e.args[0])
+        for fr in self.resultlist:
+            if fr.ind is None or delete_previous:
+                fr.savedb(dbcurs)

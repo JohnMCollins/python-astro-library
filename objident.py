@@ -15,11 +15,11 @@ class ObjIdentErr(Exception):
 class ObjIdent:
     """Contains name, display name and object index in database of known object"""
 
-    ObjIdent_attr = ('dispname', 'vicinity', 'objind', 'label')
-    ObjIdent_strings = ('objname', 'dispname', 'vicinity')
+    ObjIdent_attr = ('dispname', 'latexname', 'vicinity', 'objind', 'label')
+    ObjIdent_strings = ('objname', 'dispname', 'latexname', 'vicinity')
 
     def __init__(self, **kwargs):
-        self.objname = self.dispname = self.vicinity = self.label = None
+        self.objname = self.dispname = self.latexname = self.vicinity = self.label = None
         self.objind = 0
         self.invented = False
         try:
@@ -63,6 +63,8 @@ class ObjIdent:
         """Fix dispname to be the same as the object name if we haven't got it"""
         if self.dispname is None:
             self.dispname = self.objname
+        if self.latexname is None:
+            self.latexname = self.dispname
 
     def is_invented(self):
         """Report whether object has invented name"""
@@ -72,11 +74,13 @@ class ObjIdent:
         """Report if it's the target by comparing with vicinity"""
         return  self.objname is not None and self.objname == self.vicinity
 
-    def set_invented(self, name, dispname=None):
+    def set_invented(self, name, dispname=None, latexname=None):
         """Set an invented name for the object"""
-        self.objname = self.dispname = name
+        self.objname = self.dispname = self.latexname = name
         if dispname is not None:
             self.dispname = dispname
+        if latexname is not None:
+            self.latexname = latexname
         self.invented = True
 
     def put_ident(self, dbcurs, fnames, fvalues):
@@ -112,7 +116,7 @@ class ObjIdent:
 
     def load_ident(self, node):
         """Load from XML DOM node"""
-        self.objname = self.dispname = self.vicinity = self.label = None
+        self.objname = self.dispname = self.latexname = self.vicinity = self.label = None
         self.objind = 0
         self.invented = xmlutil.getboolattr(node, "invented")
         for child in node:
@@ -124,6 +128,8 @@ class ObjIdent:
 
         if self.dispname is None:
             self.dispname = self.objname
+        if self.latexname is None:
+            self.latexname = self.dispname
 
     def save_ident(self, doc, pnode, name="ident"):
         """Save to XML DOM node"""
@@ -134,6 +140,8 @@ class ObjIdent:
         xmlutil.savedata(doc, node, "objname", self.objname)
         if self.dispname is not None and self.dispname != self.objname:
             xmlutil.savedata(doc, node, "dispname", self.dispname)
+        if self.latexname is not None and self.latexname != self.dispname:
+            xmlutil.savedata(doc, node, "latexname", self.latexname)
         if self.objind != 0:
             xmlutil.savedata(doc, node, "objind", self.objind)
 

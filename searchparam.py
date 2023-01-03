@@ -8,63 +8,41 @@ import configfile
 
 DEFAULT_SIGN = 1.5
 DEFAULT_TOTSIGN = .75
-DEFAULT_MAXSHIFT = 10
-DEFAULT_SHIFT2 = 5
-DEFAULT_LOOKAROUND = 3
-DEFAULT_DEFAPSIZE = 6
+DEFAULT_MAXSHIFT = 10.0
+DEFAULT_SHIFT2 = 5.0
+DEFAULT_LOOKAROUND = 3.0
+DEFAULT_DEFAPSIZE = 6.0
 DEFAULT_NSIGMAAP = 2.5
-DEFAULT_MINAP = 3
-DEFAULT_MAXAP = 20
-DEFAULT_APSTEP = 1
+DEFAULT_MINAP = 3.0
+DEFAULT_MAXAP = 20.0
+DEFAULT_APSTEP = 1.0
 DEFAULT_SINGLEPIX = 7.5
 
 class SearchParamErr(Exception):
     """Throw in case of errors"""
 
 
-Field_names = dict(signif=(xmlutil.getfloat,
-                             float,
-                             DEFAULT_SIGN,
+Field_names = dict(signif=(DEFAULT_SIGN,
                              "Multiple of std devs above sky level to consider point significant"),
-                    totsig=(xmlutil.getfloat,
-                              float,
-                              DEFAULT_TOTSIGN,
+                    totsig=(DEFAULT_TOTSIGN,
                               "Total nomber of std devs to consider a peak significant"),
-                    maxshift=(xmlutil.getint,
-                               int,
-                               DEFAULT_MAXSHIFT,
+                    maxshift=(DEFAULT_MAXSHIFT,
                                "Max displacement from expected position to consider on initial search "),
-                    maxshift2=(xmlutil.getint,
-                               int,
-                               DEFAULT_SHIFT2,
+                    maxshift2=(DEFAULT_SHIFT2,
                                "Max displacement from expected position to consider on subsequent search "),
-                    lookaround=(xmlutil.getint,
-                                int,
-                                DEFAULT_LOOKAROUND,
+                    lookaround=(DEFAULT_LOOKAROUND,
                                 "Displacement to look around after finding approximate peak"),
-                    singlepixn=(xmlutil.getfloat,
-                                float,
-                                DEFAULT_SINGLEPIX,
+                    singlepixn=(DEFAULT_SINGLEPIX,
                                 "Multiple of signle pixels to treat single pixel as important"),
-                    defapsize=(xmlutil.getfloat,
-                                float,
-                                DEFAULT_DEFAPSIZE,
+                    defapsize=(DEFAULT_DEFAPSIZE,
                                 "Default aperture size if none given"),
-                    nsigmaap=(xmlutil.getfloat,
-                              float,
-                              DEFAULT_NSIGMAAP,
+                    nsigmaap=(DEFAULT_NSIGMAAP,
                               "Number of sigmas of fit to take as aperture"),
-                    minap=(xmlutil.getfloat,
-                            float,
-                            DEFAULT_MINAP,
+                    minap=(DEFAULT_MINAP,
                             "Minimum aperture size when optimising aperture"),
-                    maxap=(xmlutil.getfloat,
-                            float,
-                            DEFAULT_MAXAP,
+                    maxap=(DEFAULT_MAXAP,
                             "Maximum aperture size when optimising aperture"),
-                    apstep=(xmlutil.getfloat,
-                            float,
-                            DEFAULT_APSTEP,
+                    apstep=(DEFAULT_APSTEP,
                             "Step in aperture size when optimising aperture"))
 
 
@@ -88,12 +66,12 @@ class SearchParam:
         """Load parameters from XML file"""
         self.saveparams = False
         for f, v in Field_names.items():
-            dummy, dummy, defv, dummy = v
+            defv, dummy = v
             setattr(self, f, defv)
         for child in node:
             tagn = child.tag
             try:
-                setattr(self, tagn, Field_names[tagn][0](child))
+                setattr(self, tagn, xmlutil.getfloat(child))
             except KeyError:
                 pass
 
@@ -107,8 +85,8 @@ class SearchParam:
     def argparse(self, argp):
         """Initialise arg parser with search options"""
         for f, v in Field_names.items():
-            dummy, typ, dummy, helpm = v
-            argp.add_argument('--' + f, type=typ, default=getattr(self, f, 0), help=helpm)
+            dummy, helpm = v
+            argp.add_argument('--' + f, type=float, default=getattr(self, f, 0), help=helpm)
         argp.add_argument('--searchsave', action='store_true', help='Save new search parametrs file')
 
     def getargs(self, resargs):
@@ -123,17 +101,13 @@ class SearchParam:
         print("Search parameters:\n", file=outfile)
         maxn = maxh = 0
         for f, v in Field_names.items():
-            dummy, typ, defv, hlp = v
+            defv, hlp = v
             maxn = max(maxn, len(f))
             maxh = max(maxh, len(hlp))
         for f, v in Field_names.items():
             val = getattr(self, f, 0)
-            dummy, typ, defv, hlp = v
-            if typ == float:
-                print("{nam:{naml}s} {hlp:{hlpl}s} {val:#10.4g} (def: {defv:#10.4g}".format(nam=f, naml=maxn, hlp=hlp, hlpl=maxh, val=val, defv=defv), file=outfile)
-            else:
-                print("{nam:{naml}s} {hlp:{hlpl}s} {val:10d} (def: {defv:10d}".format(nam=f, naml=maxn, hlp=hlp, hlpl=maxh, val=val, defv=defv), file=outfile)
-
+            defv, hlp = v
+            print("{nam:{naml}s} {hlp:{hlpl}s} {val:#10.4g} (def: {defv:#10.4g}".format(nam=f, naml=maxn, hlp=hlp, hlpl=maxh, val=val, defv=defv), file=outfile)
 
 def load(fname=None, mustexist=False):
     """Load search params from file"""

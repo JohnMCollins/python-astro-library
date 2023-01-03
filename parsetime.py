@@ -3,81 +3,78 @@
 import datetime
 import re
 
-parset = re.compile('(\d+).(\d+).(\d+)(?:\D+(\d+).(\d+).(\d+)(\.\d+)?)?$')
 pallm = re.compile('(\d\d\d\d)-(\d+)$')
-pdat = re.compile("(\d+)\D(\d+)(?:\D(\d+))?")
-poff = re.compile("t-(\d+)$")
+poff = re.compile(".?-(\d+)$")
+prange = re.compile(r'(\d+(\D)\d+\2\d+(?:\D{1,4}\d+(\D)\d+(?:\3\d+(?:\.\d+)?)?)?)?\D(\d+(\D)\d+\5\d+(?:\D{1,4}\d+(\D)\d+(?:\6\d+(?:\.\d+)?)?)?)?$')
+pdatetime = re.compile(r'(\d+)(\D)(\d+)\2(\d+)(?:\D{1,4}(\d+)(\D)(\d+)(?:\6(\d+)(?:\.(\d+))?)?)?$')
 
-
-def parsetime(arg, atend=False):
-    """Parse time given as yy/mm/dd or dd/mm/yyyy followewd by optional time.
-    If no time given put start of day unless atend is set when put end of day"""
-
-    m = parset.match(arg)
-    if m is None:
-        raise ValueError("Unknown date format")
-    dparts = m.groups()
-    if dparts[3] is None:
-        yr, mon, day = [int(x) for x in dparts[0:3]]
-        if atend:
-            hr = 23
-            mn = sec = 59
-            usec = 999999
-        else:
-            hr = mn = sec = usec = 0
+def parse_datetime(st):
+    """Parse a date and possibly time field and return appropriate thing"""
+    if st is None:
+        return  None
+    mtch = pdatetime.match(st)
+    if mtch is None:
+        if st.lower() == "today":
+            return  datetime.date.today()
+        if st.lower() == "yesterday":
+            return  datetime.date.today() - datetime.timedelta(days=1)
+        mtch = poff.match(st)
+        if mtch is not None:
+            return  datetime.date.today() - datetime.timedelta(days=int(mtch.group(1)))
+        raise  ValueError("Unknown date/time " + st)
+    dy, dummy, mon, year, hr, dummy, mn, sec, usec = mtch.groups()
+    dy = int(dy)
+    mon = int(mon)
+    year = int(year)
+    if dy > 31:
+        dy, year = year, dy
+    if year < 50:
+        year += 2000
+    elif year < 100:
+        year += 1900
+    if hr is None:
+        return  datetime.date(year, mon, dy)
+    hr = int(hr)
+    mn = int(mn)
+    if sec is None:
+        sec = usec = 0
     else:
-        yr, mon, day, hr, mn, sec = [int(x) for x in dparts[0:-1]]
-        if dparts[-1] is None:
+        sec = int(sec)
+        if usec is None:
             usec = 0
         else:
-            usec = int(round(float(dparts[-1]) * 1e6))
-    if day > 31:
-        yr, day = (day, yr)
-    return  datetime.datetime(yr, mon, day, hr, mn, sec, usec)
+            usec = int(float("0." + usec) * 1e6)
+            if usec >= 1000000:
+                usec = 999999
+    return  datetime.datetime(year, mon, dy, hr, mn, sec, usec)
 
+def parsetime(arg, atend=False):
+    """Get time and date, if time not given get the beginning of the day
+    unless atend given, when give the last second"""
+    if arg is None:
+        return  None
+    dat = parse_datetime(arg)
+    if isinstance(dat, datetime.datetime):
+        return  dat
+    if atend:
+        return  datetime.datetime(dat.year, dat.month, dat.day, 23, 59, 59, 999999)
+    return  datetime.datetime(dat.year, dat.month, dat.day, 0, 0, 0, 0)
 
 def parsedate(dat):
-    """Parse an argument date and try to interpret common things"""
-    if dat is None:
-        return None
-    now = datetime.datetime.now()
-    rnow = datetime.datetime(now.year, now.month, now.day)
-    m = pdat.match(dat)
-    try:
-        if m:
-            dy, mn, yr = m.groups()
-            dy = int(dy)
-            mn = int(mn)
-            if yr is None:
-                yr = now.year
-                ret = datetime.datetime(yr, mn, dy)
-                if ret > rnow:
-                    ret = datetime.datetime(yr - 1, mn, dy)
-            else:
-                yr = int(yr)
-                if dy > 31:
-                    yr = dy
-                    dy = int(m.group(3))
-                if yr < 50:
-                    yr += 2000
-                elif yr < 100:
-                    yr += 1900
-                ret = datetime.datetime(yr, mn, dy)
-        elif dat == 'today':
-            ret = rnow
-        elif dat == 'yesterday':
-            ret = rnow - datetime.timedelta(days=1)
-        else:
-            m = poff.match(dat)
-            if m:
-                ret = rnow - datetime.timedelta(days=int(m.group(1)))
-            else:
-                raise ValueError("Could not understand date: " + dat)
-    except ValueError:
-        raise ValueError("Could not understand date: " + dat)
+    """Parse an argument date and get string date"""
+    dt = parse_datetime(dat)
+    if dt is None:
+        return  None
+    return dt.strftime("%Y-%m-%d")
 
-    return ret.strftime("%Y-%m-%d")
-
+def pack_field(dt, fieldselect, datefield, op):
+    """Insert mysql date selection into fieldselect with given op"""
+    if dt is None:
+        return
+    if isinstance(dt, datetime.datetime):
+        fieldselect.append("{:s}{:s}'{:%Y-%m-%d %H:%M:%S.%f}'".format(datefield, op, dt))
+    else:
+        fieldselect.append("DATE({:s}){:s}'{:%Y-%m-%d}'".format(datefield, op, dt))
 
 def parsedaterange(fieldselect, daterange=None, allmonth=None, datefield='date_obs'):
     """Parse date range or all month specification and set up part of a MySQL field select
@@ -98,39 +95,15 @@ def parsedaterange(fieldselect, daterange=None, allmonth=None, datefield='date_o
         fieldselect.append("date(" + datefield + ")<=date_sub(date_add('" + smonth + "',interval 1 month),interval 1 day)")
         dstring = "all month " + allmonth
     elif daterange is not None:
-        datesp = daterange.split(':')
-        # NB might get ValueError form parsedate, let it happen
-        if len(datesp) != 2:
-            # Might give specific time as well as date - allow for time delimited by :s
-            try:
-                dt = parsetime(daterange)
-                if dt.hour + dt.minute + dt.second + dt.microsecond != 0:
-                    fieldselect.append(datefield + dt.strftime("='%Y-%m-%d %H:%M:%S'"))
-                    return daterange
-            except ValueError:
-                if len(datesp) != 1:
-                    raise ValueError("Don't understand what date " + daterange + " is supposed to be")
-            fieldselect.append("date(" + datefield + ")='" + parsedate(daterange) + "'")
-            dstring = daterange
+        dstring = daterange
+        mtch = prange.match(daterange)
+        if mtch:
+            pack_field(parse_datetime(mtch.group(1)), fieldselect, datefield, ">=")
+            pack_field(parse_datetime(mtch.group(4)), fieldselect, datefield, "<=")
         else:
-            fd, td = datesp
-            dstring = ""
-            if len(fd) != 0:
-                fieldselect.append("date(" + datefield + ")>='" + parsedate(fd) + "'")
-                dstring = fd
-            if len(td) != 0:
-                fieldselect.append("date(" + datefield + ")<='" + parsedate(td) + "'")
-                if len(fd) != 0:
-                    dstring += " "
-                dstring += "up to " + td
-            elif len(fd) != 0:
-                dstring += " onwards"
-            else:
-                dstring = "All dates"
-
+            pack_field(parse_datetime(daterange), fieldselect, datefield, "=")
     # Don't do anything if neither specified.
     return dstring
-
 
 def parseargs_daterange(argp):
     """Parse arguments relevant to date range parsing"""

@@ -18,6 +18,10 @@ for k, v in filtfn.items():
     revfn[v] = k
 fmtch = re.compile('([FBImCR]).*([UB][LR])')
 
+# Std deviation (default) to calculate sky level from
+
+DEFAULT_SKYLEVELSTD = 0.5
+
 # Second element tells us whether to look for coords
 ftypes = dict(F=('Daily flat', False), B=('Daily bias', False), I=('Image', True), m=('Master', False), C=('Combined bias', False), G=('Generated flat', False))
 
@@ -76,7 +80,7 @@ class Pixoffsets:
         except TypeError:
             self.rowoffset = rowoffset
             self.coloffset = coloffset
-        dbcurs.execute("UPDATE obsinf SET rowoffset={:d},coloffset={:d} WHERE obsind={:d}".format(self.rowoffset, self.coloffset, self.obsind))
+        dbcurs.execute("UPDATE obsinf SET rowoffset={:.4f},coloffset={:.4f} WHERE obsind={:d}".format(self.rowoffset, self.coloffset, self.obsind))
 
 
 class RemFitsHdr:
@@ -201,7 +205,7 @@ class RemFitsHdr:
                 self.endy = hdr['endY']
                 self.ncolumns = self.endx - self.startx
                 self.nrows = self.endy - self.starty
-            except KeyError as e:
+            except KeyError:
                 warnings.warn("Had to insert geometry", UserWarning, stacklevel=5)
                 self.startx, self.starty, self.ncolumns, self.nrows = remdefaults.get_geom(self.date, self.filter)
                 self.endx = self.startx + self.ncolumns
@@ -231,8 +235,9 @@ class RemFits(RemFitsHdr):
 
         super().__init__(hdr, nofn)
         self.data = data
-        self.meanval = 0.0
-        self.stdval = 0.0
+        self.meanval = self.stdval = 0.0
+        self.skylev = self.skystd = 0.0
+        self.skylevstd = -1.0                   # Give silly value
         if data is not None:
             self.norm_data()
         self.from_obsind = from_obsind
@@ -257,6 +262,19 @@ class RemFits(RemFitsHdr):
         self.meanval = self.data.mean()
         self.stdval = self.data.std()
 
+    def calc_skylevel(self, skylevstdp = DEFAULT_SKYLEVELSTD):
+        """Calculate sky level (or recalculate with different value"""
+        if self.data is None or self.skylevstd == skylevstdp:
+            return
+        fimagedata = self.data.flatten()
+        skymask = fimagedata - self.meanval <= skylevstdp * self.stdval
+        fimagedata = fimagedata[skymask]
+        if len(fimagedata) < 100:
+            raise RemFitsErr("No possible sky in file")
+        self.skylev = fimagedata.mean()
+        self.skystd = fimagedata.std()
+        self.skylevstd = skylevstdp
+
     def get_pixoffsets(self, dbcurs):
         """Get pix offsets field if it exists and adjust"""
 #         print("In get_pixoffsets obsind is ", self.from_obsind, file=sys.stderr)
@@ -267,7 +285,7 @@ class RemFits(RemFitsHdr):
             raise RemFitsErr("Doing get offsets second time")
         pixoff = Pixoffsets(obsind=self.from_obsind)
         if pixoff.get_offsets(dbcurs):
-#             print("get_offsets returned col/row {:d}/{:d}".format(pixoff.coloffset, pixoff.rowoffset), file=sys.stderr)
+            # print("get_offsets returned col/row {:.4f}/{:.4f}".format(pixoff.coloffset, pixoff.rowoffset), file=sys.stderr)
             self.pixoff = pixoff
             self.wcs.accum_offsets(pixoff.coloffset, pixoff.rowoffset)
         return  self

@@ -2,11 +2,17 @@
 
 import datetime
 import pymysql
+from astropy.time import Time
+from astropy.coordinates import SkyCoord
+import astropy.units as u
 import objident
 import objposition
 import objparam
 import xmlutil
 
+# PM units
+
+MAS_YR = u.mas / u.yr
 
 class  ObjDataError(Exception):
     """Class to report errors concerning individual objects"""
@@ -182,7 +188,7 @@ class ObjData(objparam.ObjParam):
             selector = "objname=" + dbcurs.connection.escape(get_objname(dbcurs, self.objname, allobj=True))
             name = self.objname
 
-        dbcurs.execute("SELECT ind,objname,objtype,dispname,vicinity,label," \
+        dbcurs.execute("SELECT ind,objname,objtype,dispname,latexname,vicinity,label," \
                        "dist,rv,radeg,decdeg,rapm,decpm," \
                        "apsize,irapsize,apstd,irapstd,basedon,irbasedon,invented,usable," \
                        "suppress FROM objdata WHERE " + selector)
@@ -191,10 +197,9 @@ class ObjData(objparam.ObjParam):
             if len(f) == 0:
                 raise ObjDataError("(warning) Object not found", name)
             raise ObjDataError("Internal problem too many objects with name", name)
-        self.objind, self.objname, self.objtype, self.dispname, self.vicinity, self.label, \
+        self.objind, self.objname, self.objtype, self.dispname, self.latexname, self.vicinity, self.label, \
             self.dist, self.rv, self.ra, self.dec, self.rapm, self.decpm, \
             self.apsize, self.irapsize, self.apstd, self.irapstd, self.basedon, self.irbasedon, self.invented, self.usable, self.suppress = f[0]
-        self.save_pos()
         self.fix_dispname()
         self.get_mags(dbcurs, self.objind)
 
@@ -302,7 +307,45 @@ class ObjData(objparam.ObjParam):
             raise ObjDataError(e.getmessage())
         return  self.in_region(minra, maxra, mindec, maxdec)
 
-    def apply_motion_check(self, obstime):
+    def apply_motion(self, dbcurs, obstime):
+        """Apply proper motion to object for given obs time"""
+
+        if self.rapm is None or self.decpm is None:
+            return
+
+        if isinstance(obstime, datetime.date):
+            obstime_date = obstime
+            obstime_datetime = datetime.datetime(obstime.year, obstime.month, obstime.day, 12, 0, 0)
+        else:
+            obstime_date = obstime.date()
+            obstime_datetime = obstime
+
+        if self.timebasedon == obstime_date:
+            return
+
+        dbcurs.execute("SELECT radeg,decdeg FROM objpm WHERE objind={:d} AND obsdate=%s".format(self.objind), "{:%Y-%m-%d}".format(obstime_date))
+        radec = dbcurs.fetchone()
+        if radec is not None:
+            self.ra, self.dec = radec
+            return
+
+        args = dict(ra=self.ra * u.deg, dec=self.dec * u.deg, obstime=Time('J2000'), pm_ra_cosdec=self.rapm * MAS_YR, pm_dec=self.decpm * MAS_YR)
+
+        if self.dist is not None:
+            args['distance'] = self.dist * u.lightyear
+
+        if self.rv is not None:
+            args['radial_velocity'] = self.rv * u.km / u.second
+
+        spos = SkyCoord(**args).apply_space_motion(new_obstime=Time(obstime_datetime))
+        self.ra = spos.ra.deg
+        self.dec = spos.dec.deg
+        if self.dist is not None:
+            self.dist = spos.distance.lightyear
+        self.timebasedon = obstime_date
+        dbcurs.execute("INSERT INTO objpm (objind,obsdate,radeg,decdeg) VALUES ({:d},%s,{:.9e},{:.9e})".format(self.objind, self.ra, self.dec), "{:%Y-%m-%d}".format(obstime_date))
+
+    def apply_motion_check(self, dbcurs, obstime):
         """Apply proper motion (mostly) to coordinates"""
 
         try:
@@ -313,7 +356,7 @@ class ObjData(objparam.ObjParam):
         except objposition.ObjPositionErr as e:
             raise ObjDataError(e.getmessage())
 
-        self.apply_motion(obstime)
+        self.apply_motion(dbcurs, obstime)
 
     def load(self, node):
         """Load an object from XML file"""

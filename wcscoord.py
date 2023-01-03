@@ -22,7 +22,7 @@ class wcscoord:
     def __init__(self, fitshdr):
 
         self.wgcstr = wcs.WCS(fitshdr)
-        self.offsetpix = np.array((0, 0))
+        self.offsetpix = np.array((0.0, 0.0))
 
     def set_offsets(self, xoffset=None, yoffset=None):
         """Set pixel offsets after triming the front or bottom of array"""
@@ -39,14 +39,14 @@ class wcscoord:
 
     def pix_to_coords(self, pixlist):
         """Invoke conversion of pixels to RA/DEC adjusting for offsets"""
-#         if np.count_nonzero(self.offsetpix) != 0:
-#             print("Inserting offset", self.offsetpix[0], self.offsetpix[1], file=sys.stderr)
+        # if np.count_nonzero(self.offsetpix) != 0:
+        #     print("Inserting offset", self.offsetpix[0], self.offsetpix[1], file=sys.stderr)
         return self.wgcstr.wcs_pix2world(np.array(pixlist) + self.offsetpix, 0)
 
     def coords_to_pix(self, coordlist):
         """Convert coords to pixels adjusting offset"""
-#         if np.count_nonzero(self.offsetpix) != 0:
-#             print("Subtracting offset", self.offsetpix[0], self.offsetpix[1], file=sys.stderr)
+        # if np.count_nonzero(self.offsetpix) != 0:
+        #     print("Subtracting offset x={:.4f} y={:.4f}".format(self.offsetpix[0], self.offsetpix[1]), file=sys.stderr)
         return self.wgcstr.wcs_world2pix(coordlist, 0) - self.offsetpix
 
     def abspix(self, pixlist):
