@@ -9,45 +9,31 @@ import scipy.optimize as opt
 import objident
 import objdata
 import gauss2d
-
-FINDRES_DOC_ROOT = "Findres2"
+import apoffsets
+import find_overlaps
 
 DEFAULT_SIGN = 1.5
 DEFAULT_TOTSIGN = .75
 
-class FitResult:
-    """Class for remembering closeness of fit for finding algorithms"""
-
-    def __init__(self, row, col, rowdiff=0.0, coldiff=0.0, apsize = 0.0, adus=0.0, modadus = 0.0, peak=0.0, fitpeak=1.0, fitsigma=1.0, peakstd=0.0, sigmastd=0.0):
-        self.row = row
-        self.col = col
-        self.rowdiff = rowdiff
-        self.coldiff = coldiff
-        self.apsize = apsize
-        self.adus = adus
-        self.modadus = modadus
-        self.peak = peak
-        self.fitpeak = fitpeak
-        self.fitsigma = fitsigma
-        self.peakstd = peakstd
-        self.sigmastd = sigmastd
-
-
 class FindResultErr(Exception):
-    """"Throw if error faound"""
+    """"Throw if error faound option to retry without looking for offset"""
+
+    def __init__(self, msg, retrynooff=False):
+        super().__init__(msg)
+        self.retrynooff = retrynooff
 
 
 class FindResult:
     """Class for remembering a single result"""
 
-    frfields = dict(obsind='d', objind='d', ind='Z', nrow='f', ncol='f', rdiff='f', cdiff='f',
+    frfields = dict(obsind='d', objind='d', ind='Z', nrow='f', ncol='f', rdiff='f', cdiff='f', xoffstd='f', yoffstd='f',
                     radeg='f', decdeg='f', amp='f', sigma='f', ampstd='f', sigmastd='f', apsize='f',
                     adus='f', modadus='f', hide='b')
     frformats = dict(d='{:d}', f="{:.16e}", b="{:d}")
 
-    def __init__(self, obj = None, objind = None, apsize = 0.0, ind = None):
-        self.obsind = self.col = self.row = None
-        self.radeg = self.decdeg = self.rdiff = self.cdiff = 0.0
+    def __init__(self, obj = None, objind = None, obsind = None, apsize = 0.0, ind = None):
+        self.col = self.row = None
+        self.radeg = self.decdeg = self.rdiff = self.cdiff = self.xoffstd = self.yoffstd = 0.0
         self.amp = self.sigma = self.ampstd = self.sigmastd = self.adus = self.modadus = 0.0
         self.obj = None
         self.label = ""
@@ -55,6 +41,7 @@ class FindResult:
         self.ind = ind
         self.obj = obj
         self.objind = objind
+        self.obsind = obsind
         self.apsize = apsize
         if obj is not None:
             self.objind = obj.objind
@@ -78,8 +65,10 @@ class FindResult:
         if apsize is None:
             apsize = self.apsize
         if  self.sigma == 0.0 or apsize == 0.0:
-            return  0.0
-        return  self.amp * 2.0 * np.pi * (1.0 - self.sigma**2 * math.exp((apsize/self.sigma)**2 / -2.0))
+            self.modadus = 0.0
+        else:
+            self.modadus = self.amp * 2.0 * np.pi * (1.0 - self.sigma**2 * math.exp((apsize/self.sigma)**2 / -2.0))
+        return  self.modadus
 
     def is_usable(self):
         """Report if object is usable as far as we know"""
@@ -112,9 +101,26 @@ class FindResult:
 
     def loaddb(self, dbcurs, obj = None, ind = None, objind = None, obsind = None):
         """Load record from database by ind or objind and obsind"""
-        self.obj = obj
-        if obj is not None:
-            ind = obj.objind
+
+        # Various combinations depending on whether we've got object specified etc
+
+        if obj is None:
+            obj = self.obj
+        else:
+            self.obj = obj
+        if obj is None:
+            if objind is None:
+                objind = self.objind
+            else:
+                self.objind = objind
+        else:
+            self.objind = objind = obj.objind
+
+        if obsind is None:
+            obsind = self.obsind
+        else:
+            self.obsind = obsind
+
         if ind is not None:
             Wh = "ind={:d}".format(ind)
         else:
@@ -137,7 +143,8 @@ class FindResult:
             self.obj = objdata.ObjData()
             self.obj.get(dbcurs, ind=self.objind)
             self.istarget = self.obj.is_target()
-            # Maybe adjust for PM? But we have RA/DEC as adjusted in structure
+            self.obj.ra = self.radeg
+            self.obj.dec = self.decdeg
 
     def savedb(self, dbcurs):
         """Save record to database (provides for non-identified things)"""
@@ -154,7 +161,7 @@ class FindResult:
         vals = []
         for field, typ in FindResult.frfields.items():
             if field[0] == 'n':
-                val = getattr(self, field[:1], None)
+                val = getattr(self, field[1:], None)
             else:
                 val = getattr(self, field, None)
             if val is None:
@@ -169,8 +176,40 @@ class FindResult:
         dbchanges += dbcurs.execute("INSERT INTO findresult (" + ",".join(cols) + ") VALUES (" + ",".join(vals) + ")")
         self.ind = dbcurs.lastrowid
         if dbchanges > 0:
+            # print(dbchanges, "DB changes")
             dbcurs.connection.commit()
 
+    def update(self, dbcurs):
+        """Update details"""
+
+        fields = []
+
+        for field, typ in FindResult.frfields.items():
+            if field[0] == 'n':
+                val = getattr(self, field[1:], None)
+            else:
+                val = getattr(self, field, None)
+            if val is None:
+                continue
+            # Give invalid code for things we don't want to save like ind
+            try:
+                fields.append("{:s}={:s}".format(field, FindResult.frformats[typ].format(val)))
+            except KeyError:
+                continue
+        if len(fields) == 0:
+            return 0
+        return  dbcurs.execute("UPDATE findresult SET " + ",".join(fields) + " WHERE ind={:d}".format(self.ind))
+
+
+    def delete(self, dbcurs):
+        """Delete a find result and associated aducalcs"""
+        if  self.ind is None:
+            return
+        dbchanges = dbcurs.execute("DELETE from aducalc WHERE frind={:d}".format(self.ind))
+        dbchanges += dbcurs.execute("DELETE from findresult WHERE ind={:d}".format(self.ind))
+        if  dbchanges > 0:
+            dbcurs.connection.commit()
+        self.ind = None
 
 class FindResults:
     """A class for remembering things we've found"""
@@ -194,6 +233,7 @@ class FindResults:
         self.totsignif = None
         self.signif = None
         self.objdict = dict()
+        self.objinddict = dict()
         try:
             self.filter = remfitsobj.filter
             self.obsdate = remfitsobj.date
@@ -259,6 +299,13 @@ class FindResults:
         else:
             self.resultlist[k] = value
 
+    def get_by_objind(self, objind):
+        """Get findresult by object index"""
+        try:
+            return  self.objinddict[objind]
+        except  KeyError:
+            return  None
+
     def tooclose(self, row, col, existing):
         """Reject possible if too close to existing one"""
 
@@ -293,9 +340,11 @@ class FindResults:
     def rekey(self):
         """Recreate the lookup table"""
         self.objdict = dict()
+        self.objinddict = dict()
         for r in self.results():
             if r.obj is not None:
                 self.objdict[r.obj.objname] = r
+                self.objinddict[r.obj.objind] = r
             self.objdict[r.label] = r
 
     def reorder(self):
@@ -318,7 +367,7 @@ class FindResults:
 
         if self.remfitsobj is None:
             raise FindResultErr("No image specified")
-        self.imagedata = self.remfitsobj.data
+        self.imagedata = self.remfitsobj.data - self.remfitsobj.skylev
         self.pixrows, self.pixcols = self.imagedata.shape
 
         self.currentap = apsize
@@ -328,26 +377,20 @@ class FindResults:
         self.maxrow = self.pixrows - self.currentiap  # This is actually 1 more
         self.maxcol = self.pixcols - self.currentiap  # This is actually 1 more
 
-    def make_ap_mask(self, apsize=None):
-        """Make a mask of right size only for aperature of given radius"""
-
-        if apsize is None:
-            apsize = self.currentap
-        iapsize = int(math.floor(apsize))
-        xpoints, ypoints = np.meshgrid(range(-iapsize, iapsize + 1), range(-iapsize, iapsize + 1))
-        radsq = apsize * apsize
-        xsq = xpoints ** 2
-        ysq = ypoints ** 2
-        maskbool = xsq + ysq <= radsq
-        self.mask = maskbool.astype(np.float64)
-        self.maskbool = maskbool.flatten()
-        # self.xpoints = xpoints.flatten()[maskbool]
-        # self.ypoints = ypoints.flatten()[maskbool]
-        self.xypoints = (xpoints.flatten()[self.maskbool], ypoints.flatten()[self.maskbool])
-        self.maskpoints = np.count_nonzero(maskbool)
-        self.skylevpoints = self.maskpoints * self.remfitsobj.meanval
         self.min_singlepix = self.remfitsobj.meanval + self.signif * self.remfitsobj.stdval
-        self.min_apertureadus = self.maskpoints * self.remfitsobj.stdval * self.totsignif
+
+    def prune_singlepix(self, searchp, dseg, yxcoords):
+        """Prune case where minimum level of pixels around a given pixel"""
+
+        newresult = []
+        drows, dcols = dseg.shape
+
+        for y, x in yxcoords:
+            if y <= 0 or y >= drows or x <= 0 or x >= dcols:
+                continue
+            if np.count_nonzero(dseg[y-1:y+1,x-1:x+1] >= self.min_singlepix) >= searchp.min_singlepix:
+                newresult.append((y,x))
+        return  newresult
 
     def get_aperture_data(self, row, column):
         """Get data in aperture according to mask"""
@@ -358,83 +401,12 @@ class FindResults:
         """Calculate the total ADUs based arount the given row and column"""
         return  np.sum(self.get_aperture_data(row, column)) - self.skylevpoints
 
-    def get_exp_rowcol(self, ra, dec):
-        """Get expected row and column from given ra and dec"""
-        expcol, exprow = self.remfitsobj.wcs.coords_to_colrow(ra, dec)
-        self.exprow = int(round(exprow))
-        self.expcol = int(round(expcol))
-
-    def get_gauss_fit(self, row, column, rowdiff, coldiff):
-        """Get Gasssian fit and fill in results structure"""
-        dat = self.get_aperture_data(row, column) - self.remfitsobj.meanval
-        peak = dat.max()
-        adus = np.sum(dat)
-        if adus < self.min_apertureadus:
-            return  None
-
-        try:
-            (fitpeak, fitsigma), fit_errs = opt.curve_fit(gauss2d.gauss_circle, self.xypoints, dat, p0=(peak, self.remfitsobj.stdval))
-        except RuntimeError:
-            return  None
-
-        if fitpeak <= 0  or fitsigma <= 0:
-            return  None
-
-        peakstd, sigmastd = np.sqrt(np.diag(fit_errs))
-        return  FitResult(row, column, rowdiff=rowdiff, coldiff=coldiff,
-                           apsize=self.currentap, adus=np.sum(dat), peak=peak,
-                           fitpeak=fitpeak, fitsigma=fitsigma,
-                           peakstd=peakstd, sigmastd=sigmastd)
-
-    def get_object_offsets(self, searchp, maxshift=10, eoffrow=0, eoffcol=0):
-        """Search the square given by the expected reow column at the centre with maxshift eiether side"""
-
-        exprow = self.exprow - eoffrow
-        expcol = self.expcol - eoffcol
-
-        # First pass is to list points in region at least as much as to make a single pixel
-        # more than the minimum for one pixel
-
-        startrow = max(exprow - maxshift, self.minrow)
-        startcol = max(expcol - maxshift, self.mincol)
-        trows, tcols = np.where(self.imagedata[startrow:min(exprow + maxshift, self.maxrow), startcol:min(expcol + maxshift, self.maxcol)] >= self.min_singlepix)
-
-        # If we didn't find anything, give up
-
-        if len(trows) == 0:
-            return  None
-
-        # add back the start row and col
-
-        trows += startrow
-        tcols += startcol
-
-        # Return results as row offset (to add to eoffrow) col offset (ditto), row, column, adus
-
-        results = []
-
-        for trow, tcol in zip(trows, tcols):
-            # If this is single pixel or close to it, don't bother
-            if np.sum(self.imagedata[trow-1:trow+2,tcol-1:tcol+2] * self.spmask) <= searchp.singlepixn * self.min_singlepix:
-                # print("Skipping single pixel at", tcol, trow)
-                continue
-            dat = self.get_gauss_fit(trow, tcol, exprow - trow, expcol - tcol)
-            if dat is not None:
-                results.append(dat)
-
-        if len(results) == 0:
-            return  None
-
-        # Sort results by increasing distance from "origin", then by increasing fit (to make that most significant)
-
-        results = sorted(results, key=lambda x: x.rowdiff**2 + x.coldiff**2)
-        return  sorted(results, key=lambda x: x.combined_sig)
-
     def find_object(self, row, col, obj, searchp):
         """Fins specific object from expected place NB row and col might be fractional"""
         apsize = obj.apsize
         if apsize == 0:
             apsize = searchp.defapsize
+        self.get_image_dims(apsize)
 
         # This is the limit of the grid we look in
         lim = apsize + searchp.maxshift2
@@ -443,80 +415,123 @@ class FindResults:
             ist = True
             lim = apsize + searchp.maxshift
 
-        self.apsq = apsize**2
-        scanlim = int(math.ceil(lim))
-        scanpix = 2 * scanlim + 1
-        scanrange = range(-scanlim, scanlim + 1)
-        xpixes = np.tile(scanrange, (scanpix, 1))
-        ypixes = xpixes.transpose()
-        xypixes = [(y, x) for x, y in zip(xpixes.flatten(), ypixes.flatten()) if x**2 + y** 2 <= self.apsq]
+        colfrac, scol = math.modf(col)
+        rowfrac, srow = math.modf(row)
+        scol = int(scol)
+        srow = int(srow)
+        xypixoffsets = apoffsets.ap_offsets(col, row, apsize)
+        xypixes = xypixoffsets + (scol, srow)
+        # print("xypixes shape", xypixes.shape, "val", xypixes)
+        xpixes = xypixes[:,0]
+        ypixes = xypixes[:,1]
+        if xpixes.min() < self.mincol:
+            raise FindResultErr("Cannot find {:s}, too close to left edge".format(obj.dispname))
+        if xpixes.max() >= self.maxcol:
+            raise FindResultErr("Cannot find {:s}, too close to right edge".format(obj.dispname))
+        if ypixes.min() < self.minrow:
+            raise FindResultErr("Cannot find {:s}, too close to bottom edge".format(obj.dispname))
+        if ypixes.max() >= self.maxrow:
+            raise FindResultErr("Cannot find {:s}, too close to top edge".format(obj.dispname))
 
-        srow = int(round(row))
-        scol = int(round(col))
+        datavals = np.array([self.imagedata[y, x] for x, y in xypixes]) # NB Sky level subtracted
 
-        # Get segment of array, subtracting off sky level which we created previously
+        # Normalise data values to 1 as fitting works better that way
 
-        dataseg = self.remfitsobj.data[srow-scanlim:srow+scanlim+1,scol-scanlim:scol+scanlim+1] - self.remfitsobj.skylev
+        meanv = datavals.mean()
+        ndatavals = datavals / meanv
 
-        datavalues = np.array([dataseg[y + scanlim, x + scanlim] for y, x in xypixes])
-        xypixes = np.array(xypixes)
-
-        meanv = datavalues.mean()
-        datavalues /= meanv
-
+        # print("Pixoffsets", xypixoffsets, "scol/srow", scol, srow, "col/rowfrac", colfrac, rowfrac)
         try:
-            lresult, lfiterrs = opt.curve_fit(gauss2d.gauss_circle, xypixes, datavalues, p0=(0.0, 0.0, max(datavalues), np.std(datavalues)))
+            lresult, lfiterrs = opt.curve_fit(gauss2d.gauss_circle, xypixoffsets, ndatavals, p0=(colfrac, rowfrac, ndatavals.max(), np.std(ndatavals)))
         except RuntimeError:
             raise  FindResultErr("Unable to find {:s}".format(obj.dispname))
 
         fr = FindResult(obj=obj, apsize=apsize)
         cdiff, rdiff, fr.amp, fr.sigma = lresult
-        dummy, dummy, fr.ampstd, fr.sigmastd = np.diag(lfiterrs)
-        # cdiff += col - scol
-        # rdiff += row - srow
+        # print("After fit cdiff={:.4f} rdiff={:.4f} amp={:.4f} sigma={:.4f}".format(*lresult))
+        fr.xoffstd, fr.yoffstd, fr.ampstd, fr.sigmastd = np.diag(lfiterrs)
+        if fr.xoffstd > searchp.offsetsig or fr.yoffstd > searchp.offsetsig:
+            raise FindResultErr("Too great an offset error finding {:s} x={:.4g} y={:.4g}".format(obj.dispname, fr.xoffstd, fr.yoffstd), True)
+
+        # Restore from normalisation
+
         fr.amp *= meanv
         fr.ampstd *= meanv
-        cdiff = col - scol - cdiff
-        rdiff = row - srow - rdiff
-        fr.col = col - cdiff
-        fr.row = row - rdiff
-        fr.cdiff = cdiff
-        fr.rdiff = rdiff
+
+        if fr.amp <= 0.0 or fr.ampstd <= 0 or fr.amp < fr.ampstd * searchp.ampsig or fr.sigma < fr.sigmastd * searchp.sigmasig:
+            raise FindResultErr("Unable to find {:s} - too much error stderr amp {:.4g} sigma {:.4g}".format(obj.dispname, fr.ampstd, fr.sigmastd))
+
+        # The returned values of cdiff and rdiff are offsets from scol and srow
+        # Set cdiff and rdiff in structure to where we expected them to be minus where they are
+
+        fr.col = scol + cdiff
+        fr.row = srow + rdiff
+        fr.cdiff = col - fr.col
+        fr.rdiff = row - fr.row
         fr.radeg = obj.ra
         fr.decdeg = obj.dec
         fr.istarget = ist
 
+        if abs(fr.cdiff) > lim or abs(fr.rdiff) >= lim:
+            raise FindResultErr("Unable to find {:s} - too much shift cdiff={:.2f} rdiff={:.2f}".format(obj.dispname, fr.cdiff, fr.rdiff))
+
         # Now calculate ADUs from data and from fit
 
-        xypixes = [(x, y) for x, y in zip(xpixes.flatten(), ypixes.flatten()) if (x - fr.cdiff)**2 + (y - fr.rdiff) ** 2 <= self.apsq]
-        # print("xypixes", xypixes, sys.stderr)
-        # print("dataseg points", [dataseg[y+scanlim,x+scanlim] for x, y in xypixes], sys.stderr)
-        fr.adus = np.sum([dataseg[y + scanlim, x + scanlim] for x, y in xypixes])
-        fr.modadus = np.sum(gauss2d.gauss_circle(np.array(xypixes), fr.cdiff, fr.rdiff, fr.amp, fr.sigma))
-
-        # plotfigure = plt.figure()
-        # ax = plotfigure.add_subplot(111, projection='3d')
-        # ax.plot_wireframe(xpixes, ypixes, dataseg, color='b', alpha=.5)
-        # fitpoints = gauss2d.gauss2d(xpixes-fr.cdiff, ypixes-fr.rdiff, fr.amp, fr.sigma)
-        # ax.plot_surface(xpixes, ypixes, fitpoints, color='g', alpha=.5)
-        # plt.show()
+        fr.adus = np.sum(datavals)
+        fr.calculate_mod_integral()
         return  fr
 
-    def find_peak(self, row, col, searchp, apsize=None):
+    def find_peak(self, row, col, possobj, searchp):
         """Find peak for when we are giving a label to an object"""
-        if apsize is None:
-            apsize = searchp.defapsize
-        self.get_image_dims(apsize)
-        self.totsignif = searchp.totsig
-        self.signif = searchp.signif
-        self.make_ap_mask(apsize)
-        self.exprow = row
-        self.expcol = col
-        return  self.get_object_offsets(searchp, maxshift=searchp.maxshift)
+        if possobj.apsize == 0:
+            possobj.apsize = searchp.defapsize
+
+        self.get_image_dims(possobj.apsize)
+        self.min_singlepix = self.remfitsobj.meanval + searchp.signif * self.remfitsobj.stdval
+        startrow = int(math.floor(max(row - searchp.maxshift, self.minrow)))
+        startcol = int(math.floor(max(col - searchp.maxshift, self.mincol)))
+        endrow = int(math.ceil(min(row + searchp.maxshift, self.maxrow)))
+        endcol = int(math.ceil(min(col + searchp.maxshift, self.mincol)))
+        numcols = endcol - startcol
+
+        dataseg = self.imagedata[startrow:endrow, startcol:endcol]
+        fimage = dataseg.flatten()
+        order = fimage.argsort()[::-10]
+        vals = fimage[order]
+        signifs = order[vals >= self.min_singlepix]
+        if len(signifs) == 0:
+            return  None
+
+        # Comvert to list of row,col coords
+        yxvals = [(v // numcols, v % numcols) for v in signifs]
+
+        # Prune single pixels out
+
+        yxvals = self.prune_singlepix(searchp, dataseg, yxvals)
+        if len(yxvals) == 0:
+            return  None
+        yxvals = find_overlaps.find_overlaps(yxvals, possobj.apsize) + (startcol, startrow)
+        fitresults = []
+
+        for y, x in yxvals:
+            try:
+                fr = self.find_object(y, x, possobj, searchp)
+            except FindResultErr:
+                continue
+
+            fr.radeg, fr.decdeg = self.remfitsobj.wcs.colrow_to_coords(fr.col, fr.row)
+            fitresults.append(fr)
+
+        if len(fitresults) == 0:
+            return  None
+
+        if len(fitresults) != 1:
+            fitresults = sorted(fitresults, key=lambda f: f.ampstd)
+            fitresults = sorted(fitresults, key=lambda f: f.rdiff**2 + f.cdiff**2 - self.apsq)
+        return  fitresults[0]
 
     def opt_aperture(self, row, col, searchp, minap=None, maxap=None, step=None):
-        """Optimise aparture looking around either way from row and col,
-        maximising aperture tbetween minap and maxap."""
+        """Optimise aparture for given row and column."""
 
         if minap is None:
             minap = searchp.minap
@@ -524,52 +539,74 @@ class FindResults:
             maxap = searchp.maxap
         if step is None:
             step = searchp.apstep
-        results = []
+
+        self.signif = searchp.signif
+        self.get_image_dims(minap)
+
+        if  row - maxap <= 0 or row + maxap + 1 >= self.pixrows or col - maxap <= 0 or col + maxap + 1 >= self.pixcols:
+            raise  FindResultErr("Cannot optimise too close to edge")
+
+        srow = int(row)
+        scol = int(col)
+
+        apresults = []
+        means = []
+        ampstds = []
+        sigmastds = []
         for possap in np.arange(minap, maxap + step, step):
-            self.get_image_dims(possap)
-            self.make_ap_mask(possap)
-            # Store row offset, col offset, row, column, aperture, adus, adus per point
-            for rtry in range(max(self.minrow, row - searchp.lookaround), min(self.maxrow, row + searchp.lookaround)):
-                for ctry in range(max(self.mincol, col - searchp.lookaround), min(self.maxcol, col + searchp.lookaround)):
-                    gfit = self.get_gauss_fit(rtry, ctry, rtry - row, ctry - col)
-                    if gfit is not None:
-                        gfit.meanadus = gfit.adus / self.maskpoints
-                        results.append(gfit)
+            xycoords = apoffsets.ap_offsets(col, row, possap)
+            #print("xycoords", xycoords, "possap", possap)
+            datavals = np.array([self.imagedata[y,x] for x,y in xycoords+(scol,srow)])
+            #print("datavals", datavals)
+            # Can't do curve fit with less than 4 points.
+            if datavals.size <= 4:
+                continue
+            meanv = datavals.mean()
+            datavals /= meanv
+            try:
+                lresult, lfiterrs = opt.curve_fit(gauss2d.gauss_circle, xycoords, datavals, p0=(col-scol, row-srow, max(datavals), np.std(datavals)))
+            except RuntimeError:
+                continue
+            cdiff, rdiff, amp, sigma = lresult
+            amp *= meanv
+            xoffstd, yoffstd, ampstd, sigmastd = np.diag(lfiterrs)
+            ampstd *= meanv
 
-        # Choose firstly by best mean adus, then fit, then distance
+            # If offset is too much, skip or offset stds too much also skip
 
-        if len(results) == 0:
-            return  None
+            if abs(cdiff) >= searchp.maxshift  or  abs(rdiff) >= searchp.maxshift:
+                # print("Too big cdeff {:.4f} redif {:.4f} apsize {:.2f}".format(cdiff, rdiff, possap))
+                continue
+            if xoffstd > searchp.offsetsig or yoffstd > searchp.offsetsig:
+                # print("Too big offstds {:.4f} {:.4f}".format(xoffstd, yoffstd))
+                continue
 
-        # This gets results by fit of signma with multilier
+            apresults.append(possap)
+            means.append(meanv)
+            ampstds.append(ampstd)
+            sigmastds.append(sigmastd)
 
-        results = sorted(results, key=lambda x: abs(x.fitsigma*searchp.totsig-x.apsize))
+        # Choose firstly by lowest amp std
 
-        topap = results[0].apsize
-        results = [r for r in results if r.apsize == topap]
+        if len(apresults) == 0:
+            raise  FindResultErr("Cannot optimise object by Gauss fit")
 
-        results = sorted(results, key=lambda x: x.combined_sig)
-        #results = sorted(results, key=lambda x:x.sigmastd)
-        #
-        # for r in results:
-        #     print(r.apsize, r.adus, r.meanadus, r.combined_sig, r.fitpeak, r.fitsigma, r.peakstd, r.sigmastd)
-        # r = results[0]
-        # print("Final", r.apsize, r.adus, r.meanadus, r.combined_sig, r.fitpeak, r.fitsigma, r.peakstd, r.sigmastd)
-        return  results[0]
+        means = np.array(means)
+        ampstds = np.array(ampstds)
+        sigmastds = np.array(sigmastds)
+        means /= means.mean()
+        ampstds /= ampstds.mean()
+        sigmastds /= sigmastds.mean()
+        combs = np.abs(means-ampstds) + np.abs(means-sigmastds) + np.abs(ampstds-sigmastds)
+        ast = combs.argsort(kind='stable')
+        return  apresults[ast[0]]
 
-    def calccoords(self):
-        """Converts rows and columns in result list to ra and dec"""
+        # results = sorted(sorted(results, key=lambda x: x[-1]/x[-3]), key=lambda x: x[-2]/x[-4])
+        # results = sorted(results, key=lambda x: x[-1]/x[-3])
 
-        w = self.remfitsobj.wcs
-        rowcols = []
-
-        for res in self.results():
-            rowcols.append((res.col, res.row))
-
-        coordlist = w.pix_to_coords(np.array(rowcols))
-
-        for res, coords in zip(self.results(), coordlist):
-            res.radeg, res.decdeg = coords
+        # for possap, audpn, amp, sigma, ampstd, sigmastd in results:
+        #    print("{:7.2f} {:10.2f} {:12.3f} {:12.3f} {:12.3f} {:12.3f} {:.4f} {:.4f}".format(possap, -audpn, amp, sigma, ampstd, sigmastd, ampstd/amp, sigmastd/sigma))
+        # return  results
 
     def get_offsets_in_image(self):
         """Get row and column offsets in image for find results,

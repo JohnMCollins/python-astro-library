@@ -33,10 +33,11 @@ regeom_config = (dict(z=(138, 42, 944, 960), r=(1138, 48, 910, 958), i=(62, 1112
 def get_geom(datet, filt):
     """Get geometry as tuple startx, starty, columns, rows corresponding to date and filter"""
 
-    t = datet.date()
+    if isinstance(datet, datetime.datetime):
+        datet = datet.date()
     p = len(regeom_dates)
     for pd in reversed(regeom_dates):
-        if t >= pd:
+        if datet >= pd:
             try:
                 return regeom_config[p][filt]
             except KeyError:

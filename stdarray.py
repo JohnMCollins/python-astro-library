@@ -5,6 +5,7 @@ import math
 import gzip
 import io
 import numpy as np
+import apoffsets
 
 # Error types
 
@@ -261,24 +262,17 @@ class StdArray:
 
         return  self
 
-    def get_rectangle(self, row, col, halfwidth):
-        """Get rectangle centred on row col, halfwidth as given not including central point"""
-        if self.values is None:
-            raise StdArrayErr(NOT_INITIALISED, "Arrays not set up yet")
-        hwp1 = halfwidth + 1
-        if row - halfwidth < 0  or  row + hwp1 >= self.shape[0]:
-            raise StdArrayErr(INVALID_ROW, "Row out of range", row)
-        if col - halfwidth < 0  or  col + hwp1 >= self.shape[1]:
-            raise StdArrayErr(INVALID_COL, "Column out of range", col)
-        return  StdArray(values=self.values[row-halfwidth:row+hwp1,col-halfwidth:col+hwp1],
-                         stdsq=self.stdsq[row-halfwidth:row+hwp1,col-halfwidth:col+hwp1])
-
-    def get_sum(self, row, col, halfwidth, flatmask):
-        """Get sum of values and error around row and column under the control of flatmask"""
-        subarray = self.get_rectangle(row, col, halfwidth)
-        vals = subarray.values.flatten()[flatmask]
-        sq = subarray.stdsq.flatten()[flatmask]
-        return  (np.sum(vals), math.sqrt(np.sum(sq)))
+    def get_sum(self, col, row, apsize):
+        """Get sum of values and error around row and column with given aperture size
+        row, col and apsize may all be fractional"""
+        xycoords = apoffsets.ap_offsets(col, row, apsize) + (int(col), int(row))
+        vs = self.get_values()
+        errs = self.stdsq
+        try:
+            return  (np.sum([vs[(y,x)] for x,y in xycoords]), math.sqrt(np.sum([errs[(y,x)] for x, y in xycoords])))
+        except IndexError:
+            # print("col={:.4f} row={:.4f} apsize={:.4f}".format(col,row,apsize), xycoords)
+            raise StdArrayErr(INCOMPAT_SHAPE, "Coords out of range")
 
     def __add__(self, other):
         try:

@@ -17,6 +17,10 @@ DEFAULT_MINAP = 3.0
 DEFAULT_MAXAP = 20.0
 DEFAULT_APSTEP = 1.0
 DEFAULT_SINGLEPIX = 7.5
+DEFAULT_OFFSETSIG = .5
+DEFAULT_AMPSIG = .75
+DEFAULT_SIGMASIG = .75
+DEFAULT_MINSINGLEPIX = 3
 
 class SearchParamErr(Exception):
     """Throw in case of errors"""
@@ -43,7 +47,15 @@ Field_names = dict(signif=(DEFAULT_SIGN,
                     maxap=(DEFAULT_MAXAP,
                             "Maximum aperture size when optimising aperture"),
                     apstep=(DEFAULT_APSTEP,
-                            "Step in aperture size when optimising aperture"))
+                            "Step in aperture size when optimising aperture"),
+                    offsetsig=(DEFAULT_OFFSETSIG,
+                               "Maximum permissible sigma on offset on fitting"),
+                    ampsig=(DEFAULT_AMPSIG,
+                                "Maximum permissible sigma proportion on amplitude on fitting"),
+                    sigmasig=(DEFAULT_SIGMASIG,
+                              "Maximum permissible sigma proportion on fitting"),
+                    minsingpix=(DEFAULT_MINSINGLEPIX,
+                              "Minimum number of significant pixels around a significant one to count"))
 
 
 class SearchParam:
@@ -60,6 +72,9 @@ class SearchParam:
         self.minap = DEFAULT_MINAP
         self.maxap = DEFAULT_MAXAP
         self.apstep = DEFAULT_APSTEP
+        self.offsetsig = DEFAULT_OFFSETSIG
+        self.ampsig = DEFAULT_AMPSIG
+        self.sigmasig = DEFAULT_SIGMASIG
         self.saveparams = False
 
     def load(self, node):

@@ -9,6 +9,7 @@ import objident
 import objposition
 import objparam
 import xmlutil
+import remfits
 
 # PM units
 
@@ -190,7 +191,7 @@ class ObjData(objparam.ObjParam):
 
         dbcurs.execute("SELECT ind,objname,objtype,dispname,latexname,vicinity,label," \
                        "dist,rv,radeg,decdeg,rapm,decpm," \
-                       "apsize,irapsize,apstd,irapstd,basedon,irbasedon,invented,usable," \
+                       "apsize,irapsize,apstd,irapstd,basedon,irbasedon,variability,invented,usable," \
                        "suppress FROM objdata WHERE " + selector)
         f = dbcurs.fetchall()
         if len(f) != 1:
@@ -199,7 +200,8 @@ class ObjData(objparam.ObjParam):
             raise ObjDataError("Internal problem too many objects with name", name)
         self.objind, self.objname, self.objtype, self.dispname, self.latexname, self.vicinity, self.label, \
             self.dist, self.rv, self.ra, self.dec, self.rapm, self.decpm, \
-            self.apsize, self.irapsize, self.apstd, self.irapstd, self.basedon, self.irbasedon, self.invented, self.usable, self.suppress = f[0]
+            self.apsize, self.irapsize, self.apstd, self.irapstd, self.basedon, self.irbasedon, self.variability, \
+            self.invented, self.usable, self.suppress = f[0]
         self.fix_dispname()
         self.get_mags(dbcurs, self.objind)
 
@@ -369,6 +371,28 @@ class ObjData(objparam.ObjParam):
         xmlutil.setboolattr(node, "suppress", self.suppress)
         return  node
 
+    def bri_sort(self, filt):
+        """Sort key for object list"""
+        v = getattr(self, filt + "bri", None)
+        if v is not None:
+            return  -v
+        bris = []
+        mags = []
+        for f in 'griz':
+            v = getattr(self, f+'bri', None)
+            if v is not None:
+                bris.append(v)
+            v = getattr(self, f+'mag', None)
+            if v is not None:
+                mags.append(v)
+        try:
+            return -max(bris)
+        except ValueError:
+            pass
+        try:
+            return min(mags)
+        except ValueError:
+            return 1e6
 
 def prune_objects(objlist, ras, decs):
     """Prune list of objects to those within ranges of ras and decs given"""
@@ -378,82 +402,35 @@ def prune_objects(objlist, ras, decs):
     maxdec = max(decs)
     return [o for o in objlist if o.in_region(minra, maxra, mindec, maxdec)]
 
+def between_clause(colname, possibles):
+    """Generate MySQL between clause for ra or dec"""
+    return  "{:s} BETWEEN {:.9e} AND {:.9e}".format(colname, possibles.min(), possibles.max())
 
-def get_sky_region(dbcurs, vicinity, datet, ras, decs):
-    """Get objects in region of sky and djust proper motions"""
+def get_sky_region(dbcurs, remfitsobj, maxvariability = 0.0, nosuppress = True, usableonly=True):
+    """Get objects in region of sky for frame"""
 
-    # Normalise date
+    vicinity = get_objname(dbcurs, remfitsobj.target)
+    fieldselections = ["vicinity=%s"]
+    if nosuppress:
+        fieldselections.append("suppress=0")
+    if usableonly:
+        fieldselections.append("usable!=0")
+    fieldselections.append("variability<={:.6e}".format(maxvariability))
+    pixrows, pixcols = remfitsobj.data.shape
+    cornerpix = ((0, 0), (pixcols - 1, 0), (0, pixrows - 1), (pixcols - 1, pixrows - 1))
+    cornerradec = remfitsobj.wcs.pix_to_coords(cornerpix)
+    fieldselections.append(between_clause("radeg", cornerradec[:,0]))
+    fieldselections.append(between_clause("decdeg", cornerradec[:,1]))
 
-    date = datet
-    if isinstance(date, datetime.datetime):
-        date = date.date()
+    dbcurs.execute("SELECT ind FROM objdata WHERE " + " AND ".join(fieldselections), vicinity)
+    objrows = dbcurs.fetchall()
 
-    # First get ourselves a list of objects
-
-    vicinity = get_objname(dbcurs, vicinity)
-    dbcurs.execute("SELECT ind FROM objdata WHERE suppress=0 AND vicinity=%s", vicinity)
     objlist = []
-    for ind, in dbcurs.fetchall():
-        st = ObjData(objind=ind)
-        st.get(dbcurs)
-        objlist.append(st)
+    for objind, in objrows:
+        obj = ObjData()
+        obj.get(dbcurs, ind=objind)
+        obj.apply_motion(dbcurs, remfitsobj.date)
+        objlist.append(obj)
 
-    # Adjust coords for things with proper motions
-    # First get any we've marked as "slow-moving"
-
-    cached_by_id = dict()
-
-    dbcurs.execute("SELECT objpm.objind,objpm.radeg,objpm.decdeg,objpm.dist " \
-                   "FROM objpm INNER JOIN objdata " \
-                   "WHERE objpm.objind=objdata.ind " \
-                   "AND objpm.slow!=0 " \
-                   "AND objdata.vicinity=%s", vicinity)
-
-    for ind, radeg, decdeg, dist in dbcurs.fetchall():
-        cached_by_id[ind] = (radeg, decdeg, dist)
-
-    # Next any that are cached with proper motion calculated for the date
-
-    fmtdate = date.strftime("%Y-%m-%d")
-    dbcurs.execute("SELECT objpm.objind,objpm.radeg,objpm.decdeg,objpm.dist " \
-                   "FROM objpm INNER JOIN objdata " \
-                   "WHERE objpm.objind=objdata.ind " \
-                   "AND objpm.obsdate=%s " \
-                   "AND objdata.vicinity=%s", (fmtdate, vicinity))
-
-    for ind, radeg, decdeg, dist in dbcurs.fetchall():
-        cached_by_id[ind] = (radeg, decdeg, dist)
-
-    # Now do the rest adding entries for the ones we look for.
-    # Count ones we've added to cache
-
-    added = 0
-
-    for obj in objlist:
-        ind = obj.objind
-        try:
-            radeg, decdeg, dist = cached_by_id[ind]
-            obj.save_pos()
-            obj.ra = radeg
-            obj.dec = decdeg
-            obj.dist = dist
-            continue
-        except KeyError:
-            pass
-
-        # Not cached in DB, work it out and add to DB
-
-        obj.apply_motion(date)
-        fields = ["objind", "obsdate", "radeg", "decdeg" ]
-        values = [str(ind), dbcurs.connection.escape(fmtdate), str(obj.ra), str(obj.dec)]
-        if obj.dist is not None:
-            fields.append("dist")
-            values.append(str(obj.dist))
-        dbcurs.execute("INSERT INTO objpm (" + ",".join(fields) + ") VALUES (" + ",".join(values) + ")")
-        cached_by_id[ind] = (obj.ra, obj.dec, obj.dist)
-        added += 1
-
-    if added != 0:
-        dbcurs.connection.commit()
-
-    return prune_objects(objlist, ras, decs)
+    # Sort into order of descending brightness
+    return  sorted(objlist, key=lambda x: x.bri_sort(remfitsobj.filter))

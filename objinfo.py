@@ -9,11 +9,12 @@ DEFAULT_APSIZE = 6
 class ObjInfo:
     """Information and notes about objects"""
 
-    ObjInfo_attr = ('objtype', 'usable', 'apsize', 'irapsize', 'apstd', 'irapstd', 'basedon', 'irbasedon')
+    ObjInfo_attr = ('objtype', 'usable', 'apsize', 'irapsize', 'apstd', 'irapstd', 'basedon', 'irbasedon', 'variability')
 
     def __init__(self, **kwargs):
         self.objtype = None
         self.usable = True
+        self.variability = 0.0
         self.apsize = self.irapsize = DEFAULT_APSIZE
         self.apstd = self.irapstd = None
         self.basedon = self.irbasedon = 0
@@ -53,6 +54,8 @@ class ObjInfo:
         if self.irbasedon is not None:
             fnames.append("irbasedon")
             fvalues.append("{:.d}".format(self.irbasedon))
+        fnames.append('variability')
+        fvalues.append("{:.4f}".format(self.variability))
 
     def update_info(self, dbcurs, fields):
         """Update fields vector to accommodate changes in info"""
@@ -72,6 +75,7 @@ class ObjInfo:
             fields.append("basedon={:d}".format(self.basedon))
         if self.irbasedon is not None:
             fields.append("irbasedon={:d}".format(self.irbasedon))
+        fields.append("variability={:.4f}".format(self.variability))
 
     def load_info(self, node):
         """Load from XML DOM node"""
@@ -80,6 +84,7 @@ class ObjInfo:
         self.apsize = self.irapsize = DEFAULT_APSIZE
         self.apstd = self.irapstd = None
         self.basedon = self.irbasedon = 0
+        self.variability = 0.0
         for child in node:
             tagn = child.tag
             if tagn == "objtype":
@@ -96,6 +101,8 @@ class ObjInfo:
                 self.basedon = xmlutil.getint(child)
             elif tagn == "irbasedon":
                 self.irbasedon = xmlutil.getint(child)
+            elif tagn == "variability":
+                self.variability = xmlutil.getfloat(child)
 
     def save_info(self, doc, pnode, name="info"):
         """Save to XML DOM node"""
@@ -113,3 +120,5 @@ class ObjInfo:
             xmlutil.savedata(doc, node, "basedon", self.basedon)
         if self.irbasedon != 0:
             xmlutil.savedata(doc, node, "irbasedon", self.irbasedon)
+        if self.variability != 0.0:
+            xmlutil.savedata(doc, node, "variability", self.variability)
