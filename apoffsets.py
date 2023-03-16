@@ -9,7 +9,7 @@ def ap_offsets(col, row, apsize):
 
     apsq = apsize **2
     iapsize = int(math.ceil(apsize))
-    rng = range(-iapsize, iapsize+1)
+    rng = range(-iapsize, iapsize+2)
     xpoints, ypoints = np.meshgrid(rng, rng)
     colfrac, dummy = math.modf(col)
     rowfrac, dummy = math.modf(row)

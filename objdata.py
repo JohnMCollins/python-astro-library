@@ -181,6 +181,8 @@ class ObjData(objparam.ObjParam):
             selector = "objname=" + dbcurs.connection.escape(get_objname(dbcurs, name, allobj=True))
         elif self.objind != 0:
             selector = "ind={:d}".format(self.objind)
+        elif self.vicinity is not None and self.label is not None:
+            selector = "vicinity=" + dbcurs.connection.escape(self.vicinity) + " and label=" + dbcurs.connection.escape(self.label)
         else:
             try:
                 self.check_valid_id(check_vicinity=False)

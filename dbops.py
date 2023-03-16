@@ -1,3 +1,5 @@
+"""Database operations"""
+
 # @Author: John M Collins <jmc>
 # @Date:   2018-12-17T22:28:29+00:00
 # @Email:  jmc@toad.me.uk
@@ -7,16 +9,46 @@
 
 # Get DB credentials from standard places
 
-import dbcredentials
-import pymysql
 import os
 import sys
 import time
+import pymysql
+import dbcredentials
 
+MAXTRIES = 10
 
 class dbopsError(Exception):
-    pass
+    """Exception in case of error"""
 
+class DBops_cursor:
+    """Cursor class where we check for lock hold off"""
+
+    def __init__(self, curs):
+        self.cursor = curs
+        self.connection = curs.connection
+        self.lastrowid = 0
+
+    def execute(self, *args):
+        """Check execution of args"""
+        tries = 1
+        while tries <= MAXTRIES:
+            try:
+                ret =  self.cursor.execute(*args)
+                self.lastrowid = self.cursor.lastrowid
+                return  ret
+            except pymysql.OperationalError:
+                print("Backing off for {:d} seconds".format(tries), file=sys.stderr)
+                time.sleep(tries)
+            tries += 1
+        raise dbopsError("Exceeded number of tries")
+
+    def fetchall(self):
+        """Duplicate fetchall"""
+        return  self.cursor.fetchall()
+
+    def fetchone(self):
+        """Duplicate fetchone"""
+        return  self.cursor.fetchone()
 
 def opendb(name):
     """Open the database with the name given"""

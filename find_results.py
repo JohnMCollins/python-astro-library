@@ -179,6 +179,13 @@ class FindResult:
             # print(dbchanges, "DB changes")
             dbcurs.connection.commit()
 
+    def makesave(self):
+        """Create a values block for a block save"""
+        return "({:d},{:d},{:d},{:.4f},{:.4f},{:.10e},{:.10e},{:.4f},{:.4f},{:.4f},{:.4f},{:.10e},{:.10e},{:.10e},{:.10e},{:.2f},{:.10e},{:.10e})" \
+            .format(self.obsind, self.objind, self.hide, self.row, self.col,
+                    self.radeg, self.decdeg, self.rdiff, self.cdiff, self.xoffstd, self.yoffstd,
+                    self.amp, self.sigma, self.ampstd, self.sigmastd, self.apsize, self.adus, self.modadus)
+
     def update(self, dbcurs):
         """Update details"""
 
@@ -406,6 +413,7 @@ class FindResults:
         apsize = obj.apsize
         if apsize == 0:
             apsize = searchp.defapsize
+        self.signif = searchp.signif
         self.get_image_dims(apsize)
 
         # This is the limit of the grid we look in
@@ -443,7 +451,7 @@ class FindResults:
         # print("Pixoffsets", xypixoffsets, "scol/srow", scol, srow, "col/rowfrac", colfrac, rowfrac)
         try:
             lresult, lfiterrs = opt.curve_fit(gauss2d.gauss_circle, xypixoffsets, ndatavals, p0=(colfrac, rowfrac, ndatavals.max(), np.std(ndatavals)))
-        except RuntimeError:
+        except (TypeError, RuntimeError):
             raise  FindResultErr("Unable to find {:s}".format(obj.dispname))
 
         fr = FindResult(obj=obj, apsize=apsize)
@@ -530,7 +538,7 @@ class FindResults:
             fitresults = sorted(fitresults, key=lambda f: f.rdiff**2 + f.cdiff**2 - self.apsq)
         return  fitresults[0]
 
-    def opt_aperture(self, row, col, searchp, minap=None, maxap=None, step=None):
+    def opt_aperture_list(self, row, col, searchp, minap=None, maxap=None, step=None):
         """Optimise aparture for given row and column."""
 
         if minap is None:
@@ -549,10 +557,8 @@ class FindResults:
         srow = int(row)
         scol = int(col)
 
-        apresults = []
-        means = []
-        ampstds = []
-        sigmastds = []
+        results = []
+
         for possap in np.arange(minap, maxap + step, step):
             xycoords = apoffsets.ap_offsets(col, row, possap)
             #print("xycoords", xycoords, "possap", possap)
@@ -565,41 +571,58 @@ class FindResults:
             datavals /= meanv
             try:
                 lresult, lfiterrs = opt.curve_fit(gauss2d.gauss_circle, xycoords, datavals, p0=(col-scol, row-srow, max(datavals), np.std(datavals)))
-            except RuntimeError:
+            except (TypeError, RuntimeError):
                 continue
-            cdiff, rdiff, amp, sigma = lresult
-            amp *= meanv
-            xoffstd, yoffstd, ampstd, sigmastd = np.diag(lfiterrs)
-            ampstd *= meanv
+            fr = FindResult(apsize=possap)
+            cdiff, rdiff, fr.amp, fr.sigma = lresult
+            fr.xoffstd, fr.yoffstd, fr.ampstd, fr.sigmastd = np.diag(lfiterrs)
+            fr.amp *= meanv
+            fr.ampstd *= meanv
+            fr.col = scol + cdiff
+            fr.row = srow + rdiff
+            fr.cdiff = col - fr.col
+            fr.rdiff = row - fr.row
+            fr.adus = meanv
 
             # If offset is too much, skip or offset stds too much also skip
 
             if abs(cdiff) >= searchp.maxshift  or  abs(rdiff) >= searchp.maxshift:
                 # print("Too big cdeff {:.4f} redif {:.4f} apsize {:.2f}".format(cdiff, rdiff, possap))
                 continue
-            if xoffstd > searchp.offsetsig or yoffstd > searchp.offsetsig:
+            if fr.xoffstd > searchp.offsetsig or fr.yoffstd > searchp.offsetsig:
                 # print("Too big offstds {:.4f} {:.4f}".format(xoffstd, yoffstd))
                 continue
 
-            apresults.append(possap)
-            means.append(meanv)
-            ampstds.append(ampstd)
-            sigmastds.append(sigmastd)
+            results.append(fr)
 
-        # Choose firstly by lowest amp std
-
-        if len(apresults) == 0:
+        if len(results) == 0:
             raise  FindResultErr("Cannot optimise object by Gauss fit")
+
+        return  results
+
+    def opt_aperture(self, row, col, searchp, minap=None, maxap=None, step=None):
+        """Just give best aperture size"""
+
+        results = self.opt_aperture_list(row, col, searchp, minap, maxap, step)
+        means = []
+        ampstds = []
+        sigmastds = []
+        for fr in results:
+            means.append(fr.adus)
+            ampstds.append(fr.ampstd)
+            sigmastds.append(fr.sigmastd)
 
         means = np.array(means)
         ampstds = np.array(ampstds)
         sigmastds = np.array(sigmastds)
+
         means /= means.mean()
         ampstds /= ampstds.mean()
         sigmastds /= sigmastds.mean()
+
         combs = np.abs(means-ampstds) + np.abs(means-sigmastds) + np.abs(ampstds-sigmastds)
         ast = combs.argsort(kind='stable')
-        return  apresults[ast[0]]
+        return  results[ast[0]].apsize
 
         # results = sorted(sorted(results, key=lambda x: x[-1]/x[-3]), key=lambda x: x[-2]/x[-4])
         # results = sorted(results, key=lambda x: x[-1]/x[-3])
@@ -731,3 +754,17 @@ class FindResults:
         for fr in self.resultlist:
             if fr.ind is None or delete_previous:
                 fr.savedb(dbcurs)
+
+    def save_as_block(self, dbcurs, blocksize = 512):
+        """Save records as single blocks"""
+        fields = "(obsind,objind,hide,nrow,ncol,radeg,decdeg,rdiff,cdiff,xoffstd,yoffstd,amp,sigma,ampstd,sigmastd,apsize,adus,modadus) " \
+        "VALUES "
+        varr = []
+        for fr in self.resultlist:
+            varr.append(fr.makesave())
+            if len(varr) >= blocksize:
+                dbcurs.execute("INSERT INTO findresult " + fields + ",".join(varr))
+                varr = []
+        if len(varr) != 0:
+            dbcurs.execute("INSERT INTO findresult " + fields + ",".join(varr))
+        dbcurs.connection.commit()

@@ -120,13 +120,15 @@ def getargs(resargs):
         pass
 
 
-def opendb():
+def opendb(waitlock=False):
     """Open database and return tuple dbase connection and cursor"""
     global my_database
     if my_database is None:
         my_database = default_database()
     dbase = dbops.opendb(my_database)
     dbcurs = dbase.cursor()
+    if waitlock:
+        dbcurs = dbops.DBops_cursor(dbcurs)
     return (dbase, dbcurs)
 
 

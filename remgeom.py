@@ -522,6 +522,8 @@ class RemGeom:
         argp.add_argument('--height', type=float, default=which.height, help="Height of figure")
         argp.add_argument('--labsize', type=int, default=which.labsize, help='Label and title font size')
         argp.add_argument('--ticksize', type=int, default=which.ticksize, help='Tick font size')
+        argp.add_argument('--objtextfs', type=int, default=self.objdisp.objtextfs, help='Object label text font size')
+        argp.add_argument('--objtextdisp', type=int, default=self.objdisp.objtextdisp, help='Object label text displacement')
         argp.add_argument('--outfig', type=str, help='Output figure prefix if required')
 
 #     def trim_argparse(self, argp):
@@ -541,6 +543,8 @@ class RemGeom:
             self.defwinfmt.height = resargs['height']
             self.defwinfmt.labsize = resargs['labsize']
             self.defwinfmt.ticksize = resargs['ticksize']
+            self.objdisp.objtextfs = resargs['objtextfs']
+            self.objdisp.objtextdisp = resargs['objtextdisp']
             outfig = resargs['outfig']
         except KeyError as e:
             print("Error in parsed arguments", e.args[0], "is missing", file=sys.stderr)
