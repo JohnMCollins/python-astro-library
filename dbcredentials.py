@@ -1,18 +1,20 @@
-# @Author: John M Collins <jmc>
-# @Date:   2018-11-24T20:45:40+00:00
-# @Email:  jmc@toad.me.uk
-# @Filename: dbcredentials.py
-# @Last modified by:   jmc
-# @Last modified time: 2019-01-17T10:11:14+00:00
-
-# Get DB credentials from standard places
+"""Get DB credentials from standard places"""
 
 import configparser
 import os.path
 import os
+import io
+from cryptography.fernet import Fernet, InvalidToken
 
 configfilepaths = ("/etc/dbcred.ini", os.path.expanduser("~/lib/dbcred.ini"), os.path.abspath('.dbcred.ini'))
-selectconfig = dict(current = 2, lib = 1, system = 0)
+selectconfig = {"current" : 2, "lib" : 1, "system" : 0}
+fern_key = None
+try:
+    with open(os.path.expanduser("~/.jmc/sec.key"), "rb") as fkin:
+        keyf = fkin.read()
+    fern_key = Fernet(keyf)
+except (IOError, ValueError):
+    pass
 
 try:
     defaultuser = os.environ['LOGNAME']
@@ -20,9 +22,9 @@ except KeyError:
     defaultuser = None
 
 class DBcredError(Exception):
-    pass
+    """For moans about credential errors"""
 
-class DBcred(object):
+class DBcred:
     """Representation of credentials as class"""
 
     def __init__(self, host = None, database = None, user = None, password = None, login = None, localport = None, remoteport = None):
@@ -42,7 +44,7 @@ class DBcred(object):
             return  True
         return  False
 
-class DBcredfile(object):
+class DBcredfile:
     """This class uses configparser to read and optionally write a "ini" type file
     of database credentials.
     This can be ".dbcred.ini" in the current directory,
@@ -51,9 +53,26 @@ class DBcredfile(object):
     We work in terms of tuples (host, dbname, user, password)"""
 
     def __init__(self):
-        global configfilepaths
         self.cparser = configparser.ConfigParser()
-        self.cparser.read(configfilepaths)
+        for cpth in configfilepaths:
+            try:
+                with open(cpth, 'rb') as cfil:
+                    contents = cfil.read()
+            except IOError:
+                continue
+            try:
+                self.cparser.read_string(contents.decode())
+                continue
+            except configparser.Error:
+                pass
+            try:
+                contents = fern_key.decrypt(contents)
+            except InvalidToken:
+                continue
+            try:
+                self.cparser.read_string(contents.decode())
+            except configparser.Error:
+                pass
 
     def get(self, name):
         """Get credentials for the name"""
@@ -78,7 +97,7 @@ class DBcredfile(object):
         if val is None:
             self.cparser.remove_option(sect, optn)
         elif val:
-            self.cparser,set(sect, optn, val)
+            self.cparser.set(sect, optn, val)
 
     def set_values(self, sect, creds):
         """Set values according to credentials"""
@@ -115,14 +134,16 @@ class DBcredfile(object):
         write to standard names in current directory, ~/lib and system
         respectively"""
 
-        global configfilepaths, selectconfig
+        outbuf = io.StringIO()
+        self.cparser.write(outbuf)
+        cont = outbuf.getvalue().encode()
+        if fern_key is not None and filename != 'system':
+            cont = fern_key.encrypt(cont)
 
         if filename in selectconfig:
             filename = configfilepaths[selectconfig[filename]]
         try:
-            outf = open(filename, "wb")
+            with open(filename, "wb") as outf:
+                outf.write(cont)
         except IOError as e:
-            raise DBcredError("Cannoto open file " + filename + " - " + e.args[1])
-
-        self.cparser.write(outf)
-        outf.close()
+            raise DBcredError("Cannot write file " + filename + " - " + e.args[1])
