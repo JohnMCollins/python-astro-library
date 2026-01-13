@@ -19,6 +19,7 @@ def get_rest(fullname):
     buffer = io.BytesIO()
     c = pycurl.Curl()
     c.setopt(c.URL, root_url + fullname)
+    c.setopt(c.FOLLOWLOCATION, 1)
     c.setopt(c.WRITEDATA, buffer)
     c.perform()
     rcode = c.getinfo(c.RESPONSE_CODE)
