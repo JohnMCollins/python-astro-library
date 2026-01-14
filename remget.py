@@ -46,7 +46,7 @@ def get_obs(fname, remir=False):
 def get_iforb(fname):
     """Get individual flat or bias file"""
 
-    return get_rest("/REMDBdev/fits_retrieve.php?ffile=/Ross/" + fname)
+    return get_rest("/REMDB/fits_retrieve.php?ffile=/Ross/" + fname)
 
 
 def get_saved_fits(dbcurs, ind):
